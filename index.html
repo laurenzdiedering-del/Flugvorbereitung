@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flugvorbereitung</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Flugvorb.">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#14263a">
+<style>
+:root{
+  color-scheme: light dark;
+  --bg:#eef1f3; --surf:#ffffff; --ink:#14263a; --mut:#5d6f80; --line:#d3dbe2;
+  --acc:#1f5f99; --acc-ink:#ffffff; --ok:#2a8a57; --warn:#b97a00; --bad:#c23b36;
+  --okbg:#e3f3ea; --warnbg:#fbf0d6; --badbg:#f9e1df;
+  --c1:#7b8fa3; --c2:#1f5f99; --c3:#5aa0d6; --c4:#9a7fc4; --c5:#d49a1c; --c6:#2a8a57;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0e1822; --surf:#16242f; --ink:#e6edf3; --mut:#93a4b3; --line:#27384a;
+    --acc:#6aaee8; --acc-ink:#0b1722; --ok:#4cc08a; --warn:#e5b13a; --bad:#ef6b66;
+    --okbg:#143324; --warnbg:#3a2f12; --badbg:#3d1d1d;
+    --c1:#6d8196; --c2:#4b8fd1; --c3:#7fbbe8; --c4:#b39bdc; --c5:#e5b13a; --c6:#4cc08a;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.4;
+  -webkit-text-size-adjust:100%}
+body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+.top{position:sticky;top:0;z-index:5;background:var(--surf);border-bottom:1px solid var(--line);
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px}
+.title{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.title b{font-size:17px;font-weight:650}
+.title span{color:var(--mut);font-size:13px}
+.chips{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 10px;border-radius:999px;
+  border:1px solid var(--line);background:var(--bg)}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--mut)}
+.chip.ok i{background:var(--ok)} .chip.warn i{background:var(--warn)} .chip.bad i{background:var(--bad)}
+main{padding:12px 14px;max-width:640px;margin:0 auto}
+.pane{display:none}.pane.on{display:block}
+h2{font-size:15px;font-weight:650;margin:18px 0 8px;color:var(--ink)}
+h2:first-child{margin-top:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fld{display:block}
+.fld>span{display:block;font-size:13px;color:var(--mut);margin-bottom:3px}
+.inp{display:flex;align-items:center;background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:0 10px}
+.inp:focus-within{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 30%,transparent)}
+.inp input,.inp select{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;
+  padding:10px 0;outline:none;font-variant-numeric:tabular-nums}
+.inp select{padding:10px 0}
+.inp em{font-style:normal;color:var(--mut);font-size:13px;margin-left:6px}
+.full{grid-column:1/-1}
+.card{background:var(--surf);border:1px solid var(--line);border-left:5px solid var(--mut);border-radius:12px;padding:12px 14px;margin:10px 0}
+.card.ok{border-left-color:var(--ok)}.card.warn{border-left-color:var(--warn)}.card.bad{border-left-color:var(--bad)}
+.card h3{margin:0 0 6px;font-size:15px;font-weight:650}
+.big{font-size:30px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.1}
+.big small{font-size:15px;font-weight:500;color:var(--mut);margin-left:3px}
+.sub{color:var(--mut);font-size:13px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px}
+td,th{padding:6px 0;text-align:right;border-bottom:1px solid var(--line)}
+td:first-child,th:first-child{text-align:left}
+th{font-weight:500;color:var(--mut);font-size:13px}
+tr:last-child td{border-bottom:0}
+tr.sum td{font-weight:650}
+.verdict{margin:8px 0 0;font-size:14px;font-weight:600}
+.ok .verdict{color:var(--ok)}.warn .verdict{color:var(--warn)}.bad .verdict{color:var(--bad)}
+.meter{position:relative;height:10px;background:var(--bg);border-radius:6px;margin-top:10px;overflow:hidden;border:1px solid var(--line)}
+.meter i{position:absolute;left:0;top:0;bottom:0;background:var(--ok)}
+.warn .meter i{background:var(--warn)}.bad .meter i{background:var(--bad)}
+.note{font-size:13px;color:var(--mut);margin:10px 0}
+.alert{font-size:14px;padding:9px 12px;border-radius:10px;margin:8px 0;background:var(--warnbg);color:var(--ink);border:1px solid var(--warn)}
+.alert.bad{background:var(--badbg);border-color:var(--bad)}
+.wbrow{display:grid;grid-template-columns:1fr 96px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.wbrow:last-child{border-bottom:0}
+.wbrow .l b{display:block;font-weight:500}
+.wbrow .l span{font-size:12px;color:var(--mut)}
+.wbrow .inp{padding:0 8px}
+.wbrow .inp input{padding:8px 0;text-align:right}
+.box{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:6px 14px}
+svg.env{width:100%;height:auto;display:block;background:var(--surf);border:1px solid var(--line);border-radius:12px}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .poly{fill:color-mix(in srgb,var(--ok) 16%,transparent);stroke:var(--ok);stroke-width:2}
+svg text{fill:var(--mut);font-size:10px;font-family:inherit}
+svg .pt{stroke:var(--surf);stroke-width:1.5}
+svg .pt.ok{fill:var(--acc)} svg .pt.bad{fill:var(--bad)}
+svg .path{stroke:var(--acc);stroke-width:1.5;stroke-dasharray:4 3;fill:none}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--mut);margin:6px 2px}
+.stack{display:flex;height:16px;border-radius:6px;overflow:hidden;background:var(--bg);border:1px solid var(--line);position:relative}
+.stack i{display:block;height:100%}
+.mark{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--ink)}
+.keys{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--mut);margin-top:6px}
+.keys span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:var(--k)}
+button{font:inherit;cursor:pointer}
+.btn{background:var(--acc);color:var(--acc-ink);border:0;border-radius:10px;padding:10px 14px;font-weight:600}
+.btn.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+textarea{width:100%;min-height:96px;font:14px ui-monospace,Menlo,monospace;background:var(--surf);color:var(--ink);
+  border:1px solid var(--line);border-radius:10px;padding:10px}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--surf);border-top:1px solid var(--line);display:grid;
+  grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{background:none;border:0;color:var(--mut);padding:10px 2px 9px;font-size:13px;display:flex;flex-direction:column;
+  align-items:center;gap:3px;border-top:3px solid transparent}
+nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button.on{color:var(--acc);border-top-color:var(--acc);font-weight:650}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;background:var(--surf);color:var(--mut);border:0;padding:9px 0;font-weight:600}
+.seg button.on{background:var(--acc);color:var(--acc-ink)}
+canvas#scene{width:100%;height:270px;display:block;border-radius:12px;border:1px solid var(--line);background:var(--surf);margin-top:8px}
+details.det{margin:8px 0;background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+details.det summary{cursor:pointer;font-weight:600;color:var(--acc)}
+details.det textarea{margin-top:8px}
+.mono{font:12px ui-monospace,Menlo,monospace;word-break:break-word;margin:6px 0;color:var(--ink)}
+.ac-card{background:var(--surf);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+.ac-card.cur{border-left-color:var(--acc)}
+.ac-card h3{margin:0;font-size:16px;font-weight:650;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.badge{font-size:12px;font-weight:600;color:var(--acc-ink);background:var(--acc);border-radius:999px;padding:1px 9px}
+.btn.del{color:var(--bad);border-color:var(--bad)}
+.btn.small{padding:7px 12px;font-size:14px}
+@media (min-width:768px){
+  main{max-width:920px}
+  .grid{grid-template-columns:repeat(3,1fr)}
+  canvas#scene{height:420px}
+  svg.env{max-height:520px}
+}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="title"><b id="acTitle">Flugvorbereitung</b><span>Flugvorbereitung</span></div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main>
+  <section class="pane on" id="tab-perf"></section>
+  <section class="pane" id="tab-wb"></section>
+  <section class="pane" id="tab-fuel"></section>
+  <section class="pane" id="tab-ac"></section>
+  <section class="pane" id="tab-hangar"></section>
+</main>
+
+<nav id="nav">
+  <button data-tab="perf" class="on"><svg viewBox="0 0 24 24"><path d="M2 19h20M4 15l3-8 3 5 4-9 3 12"/></svg>Start/Ldg</button>
+  <button data-tab="wb"><svg viewBox="0 0 24 24"><path d="M12 3v18M4 8h16M6 8l-3 6h6zM18 8l-3 6h6z"/></svg>W&amp;B</button>
+  <button data-tab="fuel"><svg viewBox="0 0 24 24"><path d="M6 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16M4 21h13M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V9l-3-3M8 8h4"/></svg>Sprit</button>
+  <button data-tab="ac"><svg viewBox="0 0 24 24"><path d="M21 15l-8-4V5a1 1 0 0 0-2 0v6l-8 4v2l8-2v4l-2 1.5V21l3-.8 3 .8v-1.5L13 18v-4l8 2z"/></svg>Daten</button>
+  <button data-tab="hangar"><svg viewBox="0 0 24 24"><path d="M3 21V10l9-6 9 6v11M3 21h18M8 21v-7h8v7"/></svg>Hangar</button>
+</nav>
+
+<script>
+/* ---------- Zustand (nur im Speicher; Flugzeugprofil lässt sich exportieren) ---------- */
+const S = {
+  ac:{
+    name:'Beispielflugzeug (Platzhalterwerte)',
+    empty:750, emptyArm:0.99, mtow:1157, mlw:1157, maxXw:15,
+    tank:200, dens:0.72, burn:34, tas:105, fuelArm:1.22,
+    st:[
+      {n:'Pilot & Copilot', arm:0.94, max:200},
+      {n:'Passagiere hinten', arm:1.85, max:200},
+      {n:'Gepäck A', arm:2.41, max:54},
+      {n:'Gepäck B', arm:3.12, max:23}
+    ],
+    env:[[0.89,600],[0.89,885],[1.04,1157],[1.20,1157],[1.20,600]],
+    toRoll:293, toObs:514, ldRoll:175, ldObs:407,
+    daTO:10, daLD:3.5, hwKt:9, twKt:2
+  },
+  f:{w:[160,0,0,0], loaded:120},
+  p:{elev:0, qnh:1013, oat:15, rwy:270, wd:270, ws:5, tora:800, lda:800, surf:0, slope:0, sfTO:1.25, sfLD:1.25},
+  u:{dist:100, wind:0, climb:2, taxi:3, cont:10, altDist:30, res:30, extra:0}
+};
+
+const C152 = {
+  name:'D-EBOD · Reims/Cessna F152',
+  empty:563.26, emptyArm:0.804, mtow:758, mlw:758, maxXw:12,
+  tank:93, dens:0.72, burn:19.7, tas:95, fuelArm:1.06,
+  st:[
+    {n:'Pilot',arm:0.99,max:0},
+    {n:'Fluggast',arm:0.99,max:0},
+    {n:'Gepäckraum 1',arm:1.60,max:54},
+    {n:'Gepäckraum 2',arm:2.16,max:18}
+  ],
+  bagMax:54, bagIdx:[2,3],
+  env:[[0.787,500],[0.787,612],[0.829,758],[0.927,758],[0.927,500]],
+  toRoll:212, toObs:393, ldRoll:142, ldObs:361,
+  daTO:10, daLD:3.5, hwKt:9, twKt:2,
+  tab:{
+    src:'POH Abb. 5-4 (Start, Kurzstart, Klappen 10°) und Abb. 5-10 (Landung, Klappen 30°), jeweils 758 kg, Asphalt, trocken, Windstille',
+    alts:[0,1000,2000,3000,4000,5000,6000,7000,8000],
+    temps:[0,10,20,30,40],
+    grassTO:0.15, grassLD:0.45,
+    toRoll:[[195,212,230,247,267],[215,233,251,271,293],[236,256,277,299,322],[261,282,305,329,355],[287,311,335,363,392],[317,343,370,401,433],[349,379,410,443,479],[387,419,454,492,532],[428,465,504,547,591]],
+    toObs:[[363,393,424,456,489],[399,433,466,501,539],[440,477,515,555,597],[488,527,570,616,666],[541,585,634,686,744],[600,652,707,770,838],[671,730,796,870,953],[753,824,902,992,1094],[853,939,1035,1148,1279]],
+    ldRoll:[[137,142,148,152,157],[142,148,152,158,163],[148,152,158,163,169],[152,158,165,171,175],[158,165,171,177,183],[165,171,177,183,189],[171,177,184,191,197],[178,184,191,198,204],[184,192,198,206,212]],
+    ldObs:[[354,361,370,378,386],[361,370,378,387,395],[370,378,387,396,405],[378,389,398,407,415],[389,398,407,418,427],[398,407,418,427,437],[408,418,430,439,450],[419,430,439,451,462],[430,442,451,463,474]]
+  }
+};
+const EXAMPLE = JSON.parse(JSON.stringify(S.ac));
+S.ac = C152;
+S.f = {w:[80,70,5,0], loaded:50};
+S.p.tora = 800; S.p.lda = 800;
+S.w = {icao:'', state:'idle', data:null, errMsg:''};
+S.hangar = [S.ac];
+S.cur = 0;
+S.pendingDel = -1;
+function newAircraft(base){
+  const o = JSON.parse(JSON.stringify(base || EXAMPLE));
+  o.name = base ? base.name + ' (Kopie)' : 'Neues Flugzeug';
+  return o;
+}
+const SURF = [
+  ['Asphalt/Beton, trocken',1.00,1.00],
+  ['Asphalt/Beton, nass',1.00,1.15],
+  ['Gras, kurz & trocken',1.20,1.15],
+  ['Gras, nass',1.30,1.35],
+  ['Weich / hohes Gras',1.25,1.25]
+];
+
+/* ---------- Helfer ---------- */
+const get = p => p.split('.').reduce((o,k)=>o?.[k],S);
+const set = (p,v) => { const k=p.split('.'),l=k.pop(); k.reduce((o,x)=>o[x],S)[l]=v; };
+const $ = s => document.querySelector(s);
+const fmt = (v,d=0) => isFinite(v) ? v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}) : '–';
+const hm = min => { if(!isFinite(min)) return '–'; const t=Math.round(min); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+' h'; };
+const rad = d => d*Math.PI/180;
+const esc = t => String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function field(label,path,o={}){
+  const t = o.text ? 'type="text" data-text="1"' : `type="number" inputmode="decimal" step="${o.step||'any'}"`;
+  return `<label class="fld ${o.full?'full':''}"><span>${label}</span><div class="inp"><input data-bind="${path}" ${t}><em>${o.unit||''}</em></div></label>`;
+}
+function sel(label,path,opts,o={}){
+  return `<label class="fld ${o.full?'full':''}"><span>${label}</span><div class="inp"><select data-bind="${path}">${
+    opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div></label>`;
+}
+
+/* ---------- Oberfläche aufbauen ---------- */
+function build(){
+  $('#tab-perf').innerHTML = `
+    <h2>Wetter</h2>
+    <div class="grid">
+      ${field('ICAO-Code des Platzes','w.icao',{text:1})}
+      <div class="fld"><span>&nbsp;</span><button class="btn" id="loadMetar" style="width:100%;height:44px">METAR laden</button></div>
+    </div>
+    <div id="wxInfo"></div>
+    <details class="det"><summary>METAR selbst einfügen</summary>
+      <textarea id="metarRaw" spellcheck="false" placeholder="z. B. METAR EDDM 181020Z 27008KT 9999 FEW040 15/08 Q1015"></textarea>
+      <div class="row"><button class="btn sec small" id="applyRaw">Werte übernehmen</button></div>
+    </details>
+    <h2>Platz</h2>
+    <div class="grid">
+      ${field('Platzhöhe','p.elev',{unit:'ft'})}
+      ${field('QNH','p.qnh',{unit:'hPa'})}
+      ${field('Außentemperatur','p.oat',{unit:'°C'})}
+      ${sel('Belag','p.surf',SURF.map((s,i)=>[i,s[0]]))}
+    </div>
+    <h2>Piste &amp; Wind</h2>
+    <div class="grid">
+      ${field('Pistenrichtung','p.rwy',{unit:'°'})}
+      ${field('Neigung (+ bergauf)','p.slope',{unit:'%',step:'0.1'})}
+      ${field('Wind aus','p.wd',{unit:'°'})}
+      ${field('Windstärke','p.ws',{unit:'kt'})}
+      ${field('Verfügbar Start (TORA)','p.tora',{unit:'m'})}
+      ${field('Verfügbar Landung (LDA)','p.lda',{unit:'m'})}
+      ${field('Sicherheitsfaktor Start','p.sfTO',{step:'0.05'})}
+      ${field('Sicherheitsfaktor Landung','p.sfLD',{step:'0.05'})}
+    </div>
+    <p class="note">Start- und Landemasse kommen automatisch aus dem Reiter W&amp;B.</p>
+    <div id="perfResA"></div>
+    <h2>Ansicht Piste</h2>
+    <div class="seg" id="seg"><button data-mode="to" class="on">Start</button><button data-mode="ld">Landung</button></div>
+    <canvas id="scene" role="img" aria-label="3D-Ansicht der Piste mit Flugzeug"></canvas>
+    <div class="row"><button class="btn sec small" id="replay">Nochmal abspielen</button></div>
+    <p class="note" id="sceneInfo"></p>
+    <div id="perfResB"></div>`;
+
+  const wbRows = S.ac.st.map((s,i)=>`
+    <div class="wbrow"><div class="l"><b data-txt="ac.st.${i}.n"></b><span id="wbs${i}"></span></div>
+    <div class="inp"><input data-bind="f.w.${i}" type="number" inputmode="decimal"><em>kg</em></div></div>`).join('');
+  $('#tab-wb').innerHTML = `
+    <h2>Beladung</h2>
+    <div class="box">
+      <div class="wbrow"><div class="l"><b>Leermasse</b><span id="wbEmpty"></span></div><div class="sub" style="text-align:right" id="wbEmptyV"></div></div>
+      ${wbRows}
+      <div class="wbrow"><div class="l"><b>Sprit beim Tanken</b><span id="wbFuelS"></span></div>
+        <div class="inp"><input data-bind="fu.x" data-link="u.loaded" type="number" inputmode="decimal"><em>l</em></div></div>
+    </div>
+    <div id="wbRes"></div>`;
+  // Tankmenge im W&B-Feld = f.loaded
+  $('#tab-wb').querySelector('[data-link]').setAttribute('data-bind','f.loaded');
+
+  $('#tab-fuel').innerHTML = `
+    <h2>Flug</h2>
+    <div class="grid">
+      ${field('Strecke','u.dist',{unit:'NM'})}
+      ${field('Reisegeschwindigkeit (TAS)','ac.tas',{unit:'kt'})}
+      ${field('Wind (+ Gegenwind)','u.wind',{unit:'kt'})}
+      ${field('Verbrauch','ac.burn',{unit:'l/h',step:'0.1'})}
+      ${field('Zusatz Steigflug','u.climb',{unit:'l',step:'0.1'})}
+      ${field('Rollen / Anlassen','u.taxi',{unit:'l',step:'0.1'})}
+    </div>
+    <h2>Reserven</h2>
+    <div class="grid">
+      ${field('Contingency','u.cont',{unit:'% Trip'})}
+      ${field('Weg zum Ausweichplatz','u.altDist',{unit:'NM'})}
+      ${sel('Endreserve','u.res',[[30,'30 min (VFR Tag)'],[45,'45 min (VFR Nacht)'],[60,'60 min']])}
+      ${field('Extra (Wetter etc.)','u.extra',{unit:'l',step:'0.1'})}
+    </div>
+    <h2>Tanken</h2>
+    <div class="grid">${field('Getankt','f.loaded',{unit:'l'})}</div>
+    <div class="row"><button class="btn sec" id="fillMin">Auf Minimum + Extra setzen</button></div>
+    <div id="fuelRes"></div>`;
+
+  const stIn = S.ac.st.map((s,i)=>`
+    <div class="grid" style="margin-bottom:10px">
+      ${field('Station '+(i+1),`ac.st.${i}.n`,{text:1,full:1})}
+      ${field('Hebelarm',`ac.st.${i}.arm`,{unit:'m',step:'0.001'})}
+      ${field('Max. Masse',`ac.st.${i}.max`,{unit:'kg'})}
+    </div>`).join('');
+  $('#tab-ac').innerHTML = `
+    <div class="alert"><b>Platzhalterwerte.</b> Alle Zahlen sind Beispielwerte. Ersetze sie durch die Daten aus Flughandbuch (AFM/POH) und aktuellem Wiege-Datenblatt deines Luftfahrzeugs.</div>
+    <h2>Allgemein</h2>
+    <div class="grid">
+      ${field('Kennzeichen / Name','ac.name',{text:1,full:1})}
+      ${field('Leermasse','ac.empty',{unit:'kg'})}
+      ${field('Leermasse-Hebelarm','ac.emptyArm',{unit:'m',step:'0.001'})}
+      ${field('MTOW','ac.mtow',{unit:'kg'})}
+      ${field('Max. Landemasse','ac.mlw',{unit:'kg'})}
+      ${field('Tank (nutzbar)','ac.tank',{unit:'l'})}
+      ${field('Tank-Hebelarm','ac.fuelArm',{unit:'m',step:'0.001'})}
+      ${field('Dichte Kraftstoff','ac.dens',{unit:'kg/l',step:'0.01'})}
+      ${field('Max. Seitenwind','ac.maxXw',{unit:'kt'})}
+    </div>
+    <h2>Beladestationen</h2>
+    ${stIn}
+    <h2>Schwerpunktbereich</h2>
+    <p class="note">Eckpunkte des zulässigen Bereichs, eine Zeile je Punkt: Hebelarm in m; Masse in kg. Reihenfolge entlang des Randes.</p>
+    <textarea id="envText" spellcheck="false"></textarea>
+    <h2>Startleistung &amp; Landeleistung</h2>
+    <div id="tabNote"></div>
+    <p class="note">Referenzwerte bei Maximalmasse, Meereshöhe, ISA, Asphalt, Windstille (aus dem Handbuch).</p>
+    <div class="grid">
+      ${field('Startrollstrecke','ac.toRoll',{unit:'m'})}
+      ${field('Start bis 15 m','ac.toObs',{unit:'m'})}
+      ${field('Landerollstrecke','ac.ldRoll',{unit:'m'})}
+      ${field('Landung von 15 m','ac.ldObs',{unit:'m'})}
+    </div>
+    <h2>Korrekturen</h2>
+    <p class="note">Faustwerte, bitte mit dem Handbuch abgleichen.</p>
+    <div class="grid">
+      ${field('Start je 1000 ft Dichtehöhe','ac.daTO',{unit:'%',step:'0.5'})}
+      ${field('Landung je 1000 ft Dichtehöhe','ac.daLD',{unit:'%',step:'0.5'})}
+      ${field('Gegenwind: −10 % je','ac.hwKt',{unit:'kt'})}
+      ${field('Rückenwind: +10 % je','ac.twKt',{unit:'kt'})}
+    </div>`;
+
+  $('#tab-hangar').innerHTML = `
+    <h2>Meine Flugzeuge</h2>
+    <p class="note">Das ausgewählte Flugzeug wird in allen Reitern verwendet. Seine Daten bearbeitest du im Reiter Daten.</p>
+    <div id="hangarList"></div>
+    <div class="row"><button class="btn" data-act="add">Neues Flugzeug</button></div>
+    <h2>Hangar sichern</h2>
+    <p class="note">Die App speichert nichts selbst. Exportiere den ganzen Hangar als Text, bewahre ihn z. B. in einer Notiz auf und füge ihn später wieder ein.</p>
+    <textarea id="json" spellcheck="false" placeholder="Hangar-Text"></textarea>
+    <div class="row"><button class="btn sec" id="exp">Exportieren</button><button class="btn" id="imp">Importieren</button></div>
+    <div class="note" id="impMsg"></div>
+    <h2>Zurücksetzen</h2>
+    <p class="note">Löscht alle auf diesem Gerät gespeicherten Daten der App und stellt den Auslieferungszustand wieder her.</p>
+    <button class="btn sec small del" id="resetAll">App-Daten löschen</button>`;
+
+  document.querySelectorAll('[data-bind]').forEach(el=>{
+    const p = el.dataset.bind;
+    if(el.tagName==='SELECT') el.value = get(p);
+  });
+  $('#envText').value = S.ac.env.map(p=>p[0]+'; '+p[1]).join('\n');
+}
+
+/* ---------- Berechnungen ---------- */
+function calcFuel(){
+  const a=S.ac,u=S.u,f=S.f;
+  const gs = Math.max(a.tas - u.wind, 20);
+  const tripMin = u.dist/gs*60;
+  const trip = a.burn*tripMin/60 + u.climb;
+  const cont = trip*u.cont/100;
+  const altMin = u.altDist/Math.max(a.tas,1)*60;
+  const alt = a.burn*altMin/60;
+  const res = a.burn*u.res/60;
+  const req = u.taxi+trip+cont+alt+res;
+  const target = req+u.extra;
+  const toFuel = Math.max(f.loaded-u.taxi,0);
+  const endMin = a.burn>0 ? toFuel/a.burn*60 : 0;
+  let st='ok', msg='Tankmenge deckt den Bedarf.';
+  if(f.loaded > a.tank){ st='bad'; msg='Mehr als nutzbare Tankkapazität.'; }
+  else if(f.loaded < req){ st='bad'; msg='Zu wenig Sprit: Minimum nicht erreicht.'; }
+  else if(f.loaded < target){ st='warn'; msg='Minimum erreicht, aber Extra fehlt.'; }
+  return {gs,tripMin,trip,cont,alt,altMin,res,req,target,toFuel,endMin,st,msg};
+}
+
+function inPoly(x,y,poly){
+  let c=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const [xi,yi]=poly[i],[xj,yj]=poly[j];
+    if((yi>y)!==(yj>y) && x < (xj-xi)*(y-yi)/(yj-yi)+xi) c=!c;
+  }
+  return c;
+}
+
+function calcWB(fu){
+  const a=S.ac,f=S.f;
+  const items=[{n:'Leermasse',m:a.empty,arm:a.emptyArm}];
+  a.st.forEach((s,i)=>items.push({n:s.n,m:f.w[i]||0,arm:s.arm,max:s.max}));
+  const zm = items.reduce((t,i)=>t+i.m,0);
+  const zmom = items.reduce((t,i)=>t+i.m*i.arm,0);
+  const fuelTOL = fu.toFuel, fuelLDL = Math.max(fuelTOL-fu.trip,0);
+  const pt = L => { const m=zm+L*a.dens; const mom=zmom+L*a.dens*a.fuelArm; return {m,cg:mom/m,L}; };
+  const zfw={m:zm,cg:zmom/zm,L:0}, tow=pt(fuelTOL), lw=pt(fuelLDL);
+  [zfw,tow,lw].forEach(p=>p.in=inPoly(p.cg,p.m,a.env));
+  const stationOver = a.st.map((s,i)=> s.max>0 && (f.w[i]||0) > s.max);
+  const bagOver = a.bagMax>0 && Array.isArray(a.bagIdx) && a.bagIdx.reduce((t,i)=>t+(f.w[i]||0),0) > a.bagMax;
+  const fuelMass = f.loaded*a.dens;
+  const rampM = zm + fuelMass;
+  return {items,zfw,tow,lw,stationOver,bagOver,rampM,
+    towOver: tow.m>a.mtow, lwOver: lw.m>a.mlw};
+}
+
+function interp2(alts,temps,tbl,pa,t){
+  const idx=(arr,v)=>{ let i=0; while(i<arr.length-2 && v>arr[i+1]) i++; return i; };
+  const i=idx(alts,pa), j=idx(temps,t);
+  const fa=(pa-alts[i])/(alts[i+1]-alts[i]), ft=(t-temps[j])/(temps[j+1]-temps[j]);
+  const v00=tbl[i][j],v01=tbl[i][j+1],v10=tbl[i+1][j],v11=tbl[i+1][j+1];
+  return (v00*(1-ft)+v01*ft)*(1-fa)+(v10*(1-ft)+v11*ft)*fa;
+}
+function calcPerf(wb){
+  const a=S.ac,p=S.p;
+  const pa = p.elev + (1013.25-p.qnh)*27;
+  const isa = 15 - 2*pa/1000;
+  const da = pa + 120*(p.oat-isa);
+  const diff = rad(p.wd - p.rwy);
+  const hw = p.ws*Math.cos(diff), xw = p.ws*Math.sin(diff);
+  const surf = SURF[p.surf]||SURF[0];
+  const fWind = hw>=0 ? Math.max(1 - 0.10*hw/Math.max(a.hwKt,0.1),0.4) : 1 + 0.10*(-hw)/Math.max(a.twKt,0.1);
+  const clamp = v => Math.max(v,0.8);
+
+  const fDAto = clamp(1 + a.daTO/100*da/1000);
+  const fDAld = clamp(1 + a.daLD/100*da/1000);
+  const fWto = Math.pow(wb.tow.m/a.mtow,2);
+  const fWld = wb.lw.m/a.mlw;
+  const fSlTO = p.slope>0 ? 1+0.10*p.slope : 1;
+  const fSlLD = p.slope<0 ? 1+0.10*(-p.slope) : 1;
+
+  const kTO = fDAto*fWto*fWind*fSlTO*surf[1];
+  const kLD = fDAld*fWld*fWind*fSlLD*surf[2];
+  const mk = (rollRef,obsRef,k,sf,avail) => {
+    const roll=rollRef*k, obs=obsRef*k, req=obs*sf;
+    let st='ok';
+    if(req>avail) st = obs<=avail ? 'warn' : 'bad';
+    return {roll,obs,req,avail,st,margin:avail-req};
+  };
+  if(a.tab){
+    const T=a.tab, amax=T.alts[T.alts.length-1], tmax=T.temps[T.temps.length-1];
+    const paC=clampv(pa,T.alts[0],amax), tC=clampv(p.oat,T.temps[0],tmax);
+    const beyond = pa>amax || p.oat>tmax;
+    const fSl = (up)=> up;
+    const mkT=(rollT,obsT,grass,col,slopeF,sf,avail)=>{
+      let roll=interp2(T.alts,T.temps,rollT,paC,tC)*fWind*slopeF;
+      let obs=interp2(T.alts,T.temps,obsT,paC,tC)*fWind*slopeF;
+      if(p.surf>=2){
+        const add=roll*grass; roll+=add; obs+=add;
+        const extra = p.surf>=3 ? SURF[p.surf][col]/SURF[2][col] : 1;
+        roll*=extra; obs*=extra;
+      }else if(p.surf===1){ roll*=SURF[1][col]; obs*=SURF[1][col]; }
+      const req=obs*sf; let st='ok';
+      if(req>avail) st = obs<=avail ? 'warn' : 'bad';
+      return {roll,obs,req,avail,st,margin:avail-req};
+    };
+    return {pa,da,hw,xw,table:true,beyond,
+      to:mkT(T.toRoll,T.toObs,T.grassTO,1,fSlTO,p.sfTO,p.tora),
+      ld:mkT(T.ldRoll,T.ldObs,T.grassLD,2,fSlLD,p.sfLD,p.lda)};
+  }
+  return {pa,da,hw,xw,
+    to:mk(a.toRoll,a.toObs,kTO,p.sfTO,p.tora),
+    ld:mk(a.ldRoll,a.ldObs,kLD,p.sfLD,p.lda)};
+}
+
+/* ---------- Ausgabe ---------- */
+function perfCard(title,r,sf,availLabel){
+  const verdict = r.st==='ok' ? `Reicht mit Sicherheitsfaktor, Reserve ${fmt(r.margin)} m.`
+    : r.st==='warn' ? 'Nur ohne Sicherheitsfaktor ausreichend. Nicht empfohlen.'
+    : 'Strecke reicht nicht.';
+  const w = Math.min(r.req/r.avail*100,100);
+  return `<div class="card ${r.st}"><h3>${title}</h3>
+    <div class="big">${fmt(r.req)}<small>m erforderlich</small></div>
+    <table style="margin-top:8px">
+      <tr><td>Rollstrecke</td><td>${fmt(r.roll)} m</td></tr>
+      <tr><td>${title==='Start'?'Bis 15 m Hindernis':'Von 15 m Hindernis'}</td><td>${fmt(r.obs)} m</td></tr>
+      <tr><td>Mit Faktor ${fmt(sf,2)}</td><td>${fmt(r.req)} m</td></tr>
+      <tr><td>${availLabel}</td><td>${fmt(r.avail)} m</td></tr>
+    </table>
+    <div class="meter"><i style="width:${isFinite(w)?w:0}%"></i></div>
+    <p class="verdict">${verdict}</p></div>`;
+}
+
+function envSVG(wb){
+  const a=S.ac, W=340,H=290,L=46,R=12,T=12,B=34;
+  const xs=a.env.map(p=>p[0]).concat([wb.zfw.cg,wb.tow.cg,wb.lw.cg]);
+  const ys=a.env.map(p=>p[1]).concat([wb.zfw.m,wb.tow.m,wb.lw.m,a.mtow]);
+  let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const px=(x1-x0)*0.08||0.05, py=(y1-y0)*0.06||50;
+  x0-=px;x1+=px;y0-=py;y1+=py;
+  const sx=x=>L+(x-x0)/(x1-x0)*(W-L-R), sy=y=>H-B-(y-y0)/(y1-y0)*(H-T-B);
+  const ticks=(lo,hi,steps)=>{ for(const s of steps){ if((hi-lo)/s<=6){ const o=[]; for(let v=Math.ceil(lo/s)*s; v<=hi+1e-9; v+=s) o.push(+v.toFixed(4)); return o; } } return []; };
+  const xt=ticks(x0,x1,[0.02,0.05,0.1,0.2,0.5]), yt=ticks(y0,y1,[20,50,100,200,500]);
+  let g='';
+  xt.forEach(v=>{ g+=`<line class="grid" x1="${sx(v)}" x2="${sx(v)}" y1="${T}" y2="${H-B}"/><text x="${sx(v)}" y="${H-B+13}" text-anchor="middle">${fmt(v,2)}</text>`; });
+  yt.forEach(v=>{ g+=`<line class="grid" y1="${sy(v)}" y2="${sy(v)}" x1="${L}" x2="${W-R}"/><text x="${L-5}" y="${sy(v)+3}" text-anchor="end">${fmt(v)}</text>`; });
+  const poly=a.env.map(p=>`${sx(p[0])},${sy(p[1])}`).join(' ');
+  const pt=(p,shape)=>{
+    const c=p.in?'ok':'bad', x=sx(p.cg), y=sy(p.m);
+    if(shape==='sq') return `<rect class="pt ${c}" x="${x-5}" y="${y-5}" width="10" height="10"/>`;
+    if(shape==='di') return `<path class="pt ${c}" d="M${x} ${y-7}L${x+6} ${y}L${x} ${y+7}L${x-6} ${y}Z"/>`;
+    return `<circle class="pt ${c}" cx="${x}" cy="${y}" r="6"/>`;
+  };
+  return `<svg class="env" viewBox="0 0 ${W} ${H}" role="img" aria-label="Schwerpunktdiagramm">${g}
+    <polygon class="poly" points="${poly}"/>
+    <line class="path" x1="${sx(wb.tow.cg)}" y1="${sy(wb.tow.m)}" x2="${sx(wb.lw.cg)}" y2="${sy(wb.lw.m)}"/>
+    ${pt(wb.zfw,'sq')}${pt(wb.lw,'di')}${pt(wb.tow,'ci')}
+    <text x="${(L+W-R)/2}" y="${H-4}" text-anchor="middle">Schwerpunkt (m hinter Bezugsebene)</text>
+    <text transform="translate(11 ${(T+H-B)/2}) rotate(-90)" text-anchor="middle">Masse (kg)</text></svg>
+    <div class="legend"><span>■ ohne Sprit</span><span>● Start</span><span>◆ Landung</span></div>`;
+}
+
+function update(){
+  const a=S.ac;
+  const fu=calcFuel(), wb=calcWB(fu), pf=calcPerf(wb);
+
+  // gebundene Felder synchron halten
+  document.querySelectorAll('[data-bind]').forEach(el=>{
+    if(el===document.activeElement) return;
+    const v=get(el.dataset.bind); if(v!==undefined) el.value=v;
+  });
+  document.querySelectorAll('[data-txt]').forEach(el=>{ el.textContent=get(el.dataset.txt); });
+  $('#acTitle').textContent=a.name||'Flugvorbereitung';
+
+  /* Leistung */
+  let warn='';
+  if(wb.towOver) warn+=`<div class="alert bad">Startmasse über MTOW (${fmt(wb.tow.m)} kg). Berechnung gilt nur für Maximalmasse bis MTOW.</div>`;
+  if(pf.hw<0 && -pf.hw>10) warn+=`<div class="alert">Rückenwind über 10 kt. Handbuchwerte reichen meist nicht aus, Piste wechseln.</div>`;
+  if(Math.abs(pf.xw)>a.maxXw) warn+=`<div class="alert bad">Seitenwind über Maximum von ${fmt(a.maxXw)} kt.</div>`;
+  if(pf.beyond) warn+=`<div class="alert bad">Druckhöhe oder Temperatur über dem Tabellenbereich des POH. Gerechnet ist die Obergrenze, die wirkliche Strecke ist länger.</div>`;
+  if(pf.table) warn+=`<div class="alert">Werte aus den POH-Tabellen: Kurzstart mit Klappen 10° und Vollgas vor Bremsenlösen, Kurzlandung mit Klappen 30° und bestmöglichem Bremsen. Es gibt keine Tabelle für andere Massen, daher keine Anrechnung für leichtere Masse.</div>`;
+  const side = pf.xw>=0 ? 'von rechts' : 'von links';
+  LAST.pf=pf; LAST.wb=wb;
+  $('#perfResA').innerHTML = `
+    ${warn}
+    <div class="card"><h3>Bedingungen</h3><table>
+      <tr><td>Druckhöhe</td><td>${fmt(pf.pa)} ft</td></tr>
+      <tr><td>Dichtehöhe</td><td>${fmt(pf.da)} ft</td></tr>
+      <tr><td>${pf.hw>=0?'Gegenwind':'Rückenwind'}</td><td>${fmt(Math.abs(pf.hw),1)} kt</td></tr>
+      <tr><td>Seitenwind</td><td>${fmt(Math.abs(pf.xw),1)} kt ${side}</td></tr>
+      ${pf.table?'<tr><td>Grundlage</td><td>POH-Tabelle</td></tr>':''}
+      <tr><td>Startmasse / Landemasse</td><td>${fmt(wb.tow.m)} / ${fmt(wb.lw.m)} kg</td></tr>
+    </table></div>`;
+  $('#perfResB').innerHTML = `
+    ${perfCard('Start',pf.to,S.p.sfTO,'Verfügbar (TORA)')}
+    ${perfCard('Landung',pf.ld,S.p.sfLD,'Verfügbar (LDA)')}
+    <p class="note">Näherungsrechnung mit Faustkorrekturen. Das Flughandbuch und dein eigenes Urteil haben Vorrang.</p>`;
+
+  /* W&B */
+  a.st.forEach((s,i)=>{ const el=$('#wbs'+i); if(el) el.textContent=`Hebelarm ${fmt(s.arm,2)} m${s.max>0?', max. '+fmt(s.max)+' kg':''}${wb.stationOver[i]?' (überschritten)':''}`; if(el) el.style.color=wb.stationOver[i]?'var(--bad)':''; });
+  $('#wbEmpty').textContent=`Hebelarm ${fmt(a.emptyArm,3)} m`;
+  $('#wbEmptyV').textContent=fmt(a.empty)+' kg';
+  $('#wbFuelS').textContent=`Hebelarm ${fmt(a.fuelArm,2)} m, ${fmt(S.f.loaded*a.dens)} kg, abzüglich Rollen ${fmt(wb.tow.L)} l beim Start`;
+  let wbWarn='';
+  if(wb.towOver) wbWarn+=`<div class="alert bad">Startmasse ${fmt(wb.tow.m)} kg überschreitet MTOW (${fmt(a.mtow)} kg) um ${fmt(wb.tow.m-a.mtow)} kg.</div>`;
+  if(wb.lwOver) wbWarn+=`<div class="alert bad">Landemasse überschreitet das Maximum (${fmt(a.mlw)} kg).</div>`;
+  [['Ohne Sprit',wb.zfw],['Start',wb.tow],['Landung',wb.lw]].forEach(([n,p])=>{ if(!p.in) wbWarn+=`<div class="alert bad">Schwerpunkt (${n}) außerhalb des zulässigen Bereichs.</div>`; });
+  if(wb.bagOver) wbWarn+=`<div class="alert bad">Gepäck insgesamt über ${fmt(a.bagMax)} kg.</div>`;
+  if(S.f.loaded>a.tank) wbWarn+=`<div class="alert bad">Getankte Menge übersteigt die Tankkapazität.</div>`;
+  const rowW=(n,p)=>`<tr><td>${n}</td><td>${fmt(p.m)} kg</td><td>${fmt(p.cg,3)} m</td><td style="color:var(${p.in?'--ok':'--bad'})">${p.in?'ok':'außen'}</td></tr>`;
+  $('#wbRes').innerHTML = `${wbWarn}
+    <h2>Ergebnis</h2>
+    <div class="box"><table>
+      <tr><th></th><th>Masse</th><th>Schwerpunkt</th><th></th></tr>
+      ${rowW('Ohne Sprit',wb.zfw)}${rowW('Start',wb.tow)}${rowW('Landung',wb.lw)}
+      <tr class="sum"><td>Reserve zu MTOW</td><td>${fmt(a.mtow-wb.tow.m)} kg</td><td></td><td></td></tr>
+    </table></div>
+    <h2>Diagramm</h2>${envSVG(wb)}`;
+
+  /* Sprit */
+  const bar=[['Rollen',S.u.taxi,'--c1'],['Trip',fu.trip,'--c2'],['Contingency',fu.cont,'--c3'],['Ausweichen',fu.alt,'--c4'],['Endreserve',fu.res,'--c5'],['Extra',S.u.extra,'--c6']];
+  const cap=Math.max(a.tank,1);
+  $('#fuelRes').innerHTML = `
+    <div class="card ${fu.st}"><h3>Tankmenge</h3>
+      <div class="big">${fmt(fu.target,1)}<small>l Minimum plus Extra</small></div>
+      <p class="verdict">${fu.msg}</p>
+      <div class="stack" style="margin-top:10px">${bar.map(b=>`<i style="width:${Math.max(b[1],0)/cap*100}%;background:var(${b[2]})"></i>`).join('')}
+        <span class="mark" style="left:${Math.min(S.f.loaded/cap*100,100)}%"></span></div>
+      <div class="keys">${bar.map(b=>`<span style="--k:var(${b[2]})">${b[0]}</span>`).join('')}</div>
+      <p class="sub" style="margin:8px 0 0">Schwarze Marke: getankte Menge. Balkenende: Tankkapazität ${fmt(a.tank)} l.</p>
+    </div>
+    <div class="box"><table>
+      <tr><th></th><th>Liter</th><th>Zeit</th></tr>
+      <tr><td>Rollen / Anlassen</td><td>${fmt(S.u.taxi,1)}</td><td></td></tr>
+      <tr><td>Trip (inkl. Steigflug)</td><td>${fmt(fu.trip,1)}</td><td>${hm(fu.tripMin)}</td></tr>
+      <tr><td>Contingency ${fmt(S.u.cont)} %</td><td>${fmt(fu.cont,1)}</td><td></td></tr>
+      <tr><td>Ausweichplatz</td><td>${fmt(fu.alt,1)}</td><td>${hm(fu.altMin)}</td></tr>
+      <tr><td>Endreserve</td><td>${fmt(fu.res,1)}</td><td>${hm(S.u.res)}</td></tr>
+      <tr class="sum"><td>Minimum</td><td>${fmt(fu.req,1)}</td><td></td></tr>
+      <tr><td>Extra</td><td>${fmt(S.u.extra,1)}</td><td></td></tr>
+      <tr class="sum"><td>Getankt</td><td>${fmt(S.f.loaded,1)}</td><td></td></tr>
+    </table></div>
+    <div class="box" style="margin-top:10px"><table>
+      <tr><td>Geschwindigkeit über Grund</td><td>${fmt(fu.gs)} kt</td></tr>
+      <tr><td>Flugzeit gesamt (Tank bei Start)</td><td>${hm(fu.endMin)}</td></tr>
+      <tr><td>Sprit bei Landung (Trip verbraucht)</td><td>${fmt(wb.lw.L,1)} l</td></tr>
+    </table></div>
+    <p class="note">Mindestmengen richten sich nach den für deinen Flug geltenden Vorschriften und deiner eigenen Planung.</p>`;
+
+  /* Hangar */
+  $('#hangarList').innerHTML = S.hangar.map((x,i)=>`
+    <div class="ac-card ${i===S.cur?'cur':''}">
+      <h3>${esc(x.name||'Ohne Namen')}${i===S.cur?'<span class="badge">aktiv</span>':''}</h3>
+      <div class="sub">Leermasse ${fmt(x.empty)} kg · MTOW ${fmt(x.mtow)} kg · Tank ${fmt(x.tank)} l</div>
+      <div class="row">
+        ${i===S.cur?'':`<button class="btn small" data-act="sel" data-i="${i}">Auswählen</button>`}
+        <button class="btn sec small" data-act="dup" data-i="${i}">Duplizieren</button>
+        ${S.hangar.length>1 ? (S.pendingDel===i
+          ? `<button class="btn sec small del" data-act="del" data-i="${i}">Wirklich löschen?</button><button class="btn sec small" data-act="cancel">Abbrechen</button>`
+          : `<button class="btn sec small del" data-act="del" data-i="${i}">Löschen</button>`) : ''}
+      </div>
+    </div>`).join('');
+
+  const tn=$('#tabNote'); if(tn) tn.innerHTML = a.tab ? '<div class="alert">Dieses Flugzeug rechnet mit den hinterlegten Tabellen: '+esc(a.tab.src)+'. Die Referenzwerte unten werden dann nicht verwendet.</div>' : '';
+  /* Wetter & Ansicht */
+  $('#wxInfo').innerHTML = renderWx();
+  if(!SC.playing) SC.t = 1;
+  sceneInfo(); drawScene();
+
+  saveState();
+
+  /* Statusleiste */
+  const mass = wb.towOver||wb.lwOver||wb.bagOver||wb.stationOver.some(Boolean) ? 'bad' : (wb.tow.m>a.mtow*0.98?'warn':'ok');
+  const cg = (wb.zfw.in&&wb.tow.in&&wb.lw.in)?'ok':'bad';
+  const chip=(n,s)=>`<div class="chip ${s}"><i></i>${n}</div>`;
+  $('#chips').innerHTML = chip('Masse',mass)+chip('Schwerpunkt',cg)+chip('Start',pf.to.st)+chip('Landung',pf.ld.st)+chip('Sprit',fu.st);
+}
+
+/* ---------- Ereignisse ---------- */
+document.addEventListener('input',e=>{
+  const el=e.target;
+  if(el.id==='envText'){
+    const pts=el.value.split('\n').map(l=>l.split(/[;,\s]+/).map(s=>parseFloat(s.replace(',','.')))).filter(p=>p.length>=2&&isFinite(p[0])&&isFinite(p[1])).map(p=>[p[0],p[1]]);
+    if(pts.length>=3){ S.ac.env=pts; update(); }
+    return;
+  }
+  if(!el.dataset.bind) return;
+  if(el.dataset.text){ if(el.dataset.bind==='w.icao') el.value=el.value.toUpperCase(); set(el.dataset.bind,el.value); }
+  else { const v=parseFloat(String(el.value).replace(',','.')); set(el.dataset.bind,isFinite(v)?v:0); }
+  update();
+});
+document.addEventListener('change',e=>{ if(e.target.dataset.bind) { if(e.target.tagName==='SELECT'){ set(e.target.dataset.bind,parseFloat(e.target.value)); } update(); }});
+document.addEventListener('keydown',e=>{ if(e.key==='Enter' && e.target.dataset && e.target.dataset.bind==='w.icao') loadMetar(); });
+window.addEventListener('resize',()=>drawScene());
+$('#nav').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='tab-'+b.dataset.tab));
+  window.scrollTo(0,0);
+  if(b.dataset.tab==='perf') play();
+});
+document.addEventListener('click',e=>{
+  if(e.target.id==='resetAll'){
+    if(!S.resetArm){ S.resetArm=true; e.target.textContent='Wirklich alles löschen? Nochmal tippen'; return; }
+    try{ localStorage.removeItem(STORE_KEY); }catch(_){}
+    location.reload(); return;
+  }
+  if(e.target.id==='loadMetar') loadMetar();
+  if(e.target.id==='applyRaw') applyRawMetar();
+  if(e.target.id==='replay') play();
+  if(e.target.closest('#seg') && e.target.dataset.mode){
+    SC.mode=e.target.dataset.mode;
+    document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x===e.target));
+    play(); return;
+  }
+  const act=e.target.dataset.act;
+  if(act){
+    const i=parseInt(e.target.dataset.i);
+    if(act==='sel') useAircraft(i);
+    if(act==='add'){ S.hangar.push(newAircraft()); useAircraft(S.hangar.length-1); document.querySelector('nav [data-tab=ac]').click(); return; }
+    if(act==='dup'){ S.hangar.splice(i+1,0,newAircraft(S.hangar[i])); S.pendingDel=-1; update(); }
+    if(act==='del'){
+      if(S.pendingDel!==i){ S.pendingDel=i; }
+      else { let c=S.cur; S.hangar.splice(i,1); S.pendingDel=-1; if(i<c) c--; c=Math.min(Math.max(c,0),S.hangar.length-1); S.cur=c; S.ac=S.hangar[c]; $('#envText').value=S.ac.env.map(p=>p[0]+'; '+p[1]).join('\n'); }
+      update();
+    }
+    if(act==='cancel'){ S.pendingDel=-1; update(); }
+    return;
+  }
+  if(e.target.id==='fillMin'){ const fu=calcFuel(); S.f.loaded=Math.ceil(fu.target); update(); }
+  if(e.target.id==='exp'){ $('#json').value=JSON.stringify({hangar:S.hangar,cur:S.cur}); $('#json').select(); $('#impMsg').textContent='Profil-Text erstellt. Kopiere ihn und bewahre ihn sicher auf.'; }
+  if(e.target.id==='imp'){
+    try{
+      const o=JSON.parse($('#json').value);
+      const list = Array.isArray(o.hangar) ? o.hangar : (Array.isArray(o.st)&&Array.isArray(o.env) ? [o] : null);
+      if(!list||!list.length) throw 0;
+      const base=JSON.parse(JSON.stringify(EXAMPLE));
+      const clean=list.map(x=>{
+        if(!x||!Array.isArray(x.st)||!Array.isArray(x.env)) throw 0;
+        const y=Object.assign(JSON.parse(JSON.stringify(base)),x);
+        while(y.st.length<4) y.st.push({n:'Station',arm:1,max:0});
+        y.st=y.st.slice(0,4);
+        return y;
+      });
+      S.hangar=clean; S.pendingDel=-1;
+      useAircraft(Math.min(Math.max(parseInt(o.cur)||0,0),clean.length-1));
+      $('#impMsg').textContent=clean.length+' Flugzeug(e) geladen.';
+    }catch(_){ $('#impMsg').textContent='Der Text ist kein gültiger Hangar.'; }
+  }
+});
+
+
+/* ---------- Wetter (METAR) ---------- */
+function parseMetar(raw){
+  const t=' '+raw.trim().replace(/\s+/g,' ')+' ', o={raw:raw.trim().replace(/\s+/g,' ')};
+  let m=t.match(/\s(?:METAR\s+|SPECI\s+)?(?:COR\s+)?([A-Z]{4})\s+(\d{2})(\d{2})(\d{2})Z/);
+  if(m){ o.icao=m[1]; o.day=+m[2]; o.hh=+m[3]; o.mm=+m[4]; }
+  m=t.match(/\s(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?(KT|MPS)\s/);
+  if(m){ const f=m[4]==='MPS'?1.944:1; o.wdir=m[1]==='VRB'?'VRB':+m[1]; o.wspd=Math.round(+m[2]*f); if(m[3]) o.wgst=Math.round(+m[3]*f); }
+  m=t.match(/\s(M?\d{2})\/(M?\d{2})?\s/);
+  if(m) o.temp = m[1][0]==='M' ? -parseInt(m[1].slice(1),10) : parseInt(m[1],10);
+  m=t.match(/\sQ(\d{4})\s/);
+  if(m) o.qnh=+m[1]; else { m=t.match(/\sA(\d{4})\s/); if(m) o.qnh=Math.round(+m[1]/100*33.8639); }
+  if(o.day!==undefined){
+    const n=new Date(); let d=Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),o.day,o.hh,o.mm);
+    if(d>Date.now()+3600e3) d=Date.UTC(n.getUTCFullYear(),n.getUTCMonth()-1,o.day,o.hh,o.mm);
+    o.time=d;
+  }
+  return o;
+}
+function applyWx(w){
+  if(Number.isFinite(w.qnh)) S.p.qnh=Math.round(w.qnh);
+  if(Number.isFinite(w.temp)) S.p.oat=Math.round(w.temp);
+  if(Number.isFinite(w.wspd)) S.p.ws=w.wspd;
+  if(typeof w.wdir==='number') S.p.wd=w.wdir;
+  if(Number.isFinite(w.elev)) S.p.elev=Math.round(w.elev*3.28084);
+  S.w.state='ok'; S.w.data=w; update();
+}
+async function loadMetar(){
+  const id=(S.w.icao||'').trim().toUpperCase();
+  if(!/^[A-Z]{4}$/.test(id)){ S.w.state='err'; S.w.errMsg='Bitte einen vierstelligen ICAO-Code eingeben, z. B. EDDM.'; return update(); }
+  S.w.state='loading'; update();
+  const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(),12000);
+  try{
+    const r=await fetch('https://aviationweather.gov/api/data/metar?ids='+id+'&format=json',{signal:ctrl.signal});
+    clearTimeout(to);
+    const txt = r.status===204 ? '' : await r.text();
+    if(r.status!==204 && !r.ok) throw new Error('HTTP '+r.status);
+    let arr=[]; if(txt.trim()){ try{ arr=JSON.parse(txt); }catch(_){ throw new Error('Antwort nicht lesbar'); } }
+    if(!Array.isArray(arr)||!arr.length){
+      S.w.state='none'; S.w.errMsg='Für '+id+' liegt kein aktuelles METAR vor. Viele kleine Plätze haben keins. Nimm das METAR eines nahen Platzes oder trage die Werte von Hand ein.';
+      return update();
+    }
+    const m=arr[0], raw=m.rawOb||'', pr=parseMetar(raw);
+    let q=Number.isFinite(m.altim)?m.altim:pr.qnh; if(Number.isFinite(q)&&q<100) q=q*33.8639;
+    let time = Number.isFinite(m.obsTime) ? m.obsTime*1000 : (m.reportTime ? Date.parse(String(m.reportTime).replace(' ','T').replace(/Z?$/,'Z')) : pr.time);
+    applyWx({
+      icao:m.icaoId||pr.icao||id, name:m.name||'', raw, time,
+      temp:Number.isFinite(m.temp)?m.temp:pr.temp,
+      wdir:(m.wdir!==undefined&&m.wdir!==null)?m.wdir:pr.wdir,
+      wspd:Number.isFinite(m.wspd)?m.wspd:pr.wspd,
+      wgst:Number.isFinite(m.wgst)?m.wgst:pr.wgst,
+      qnh:q, elev:Number.isFinite(m.elev)?m.elev:null
+    });
+  }catch(err){
+    clearTimeout(to);
+    S.w.state='err';
+    S.w.errMsg = err.name==='AbortError' ? 'Zeitüberschreitung beim Abruf. Prüfe deine Verbindung oder füge das METAR unten manuell ein.'
+      : 'Abruf nicht möglich. Entweder fehlt das Internet oder der Browser blockiert den Abruf aus dieser Seite. Du kannst das METAR unten manuell einfügen.';
+    update();
+  }
+}
+function applyRawMetar(){
+  const raw=$('#metarRaw').value;
+  const pr=parseMetar(raw);
+  if(!raw.trim() || (pr.qnh===undefined && pr.temp===undefined && pr.wspd===undefined)){
+    S.w.state='err'; S.w.errMsg='Aus dem Text konnte ich keine Werte lesen. Füge die komplette METAR-Zeile ein.'; return update();
+  }
+  if(pr.icao) S.w.icao=pr.icao;
+  applyWx(Object.assign({name:'',elev:null},pr));
+}
+function renderWx(){
+  const w=S.w;
+  if(w.state==='loading') return '<p class="note">Lade METAR …</p>';
+  if(w.state==='err') return '<div class="alert bad">'+esc(w.errMsg)+'</div>';
+  if(w.state==='none') return '<div class="alert">'+esc(w.errMsg)+'</div>';
+  if(w.state!=='ok'||!w.data) return '<p class="note">ICAO-Code eingeben und METAR laden. Alle Werte lassen sich danach von Hand ändern.</p>';
+  const d=w.data;
+  let when='Zeit unbekannt', warn='';
+  if(d.time){
+    const iso=new Date(d.time).toISOString(), age=Math.round((Date.now()-d.time)/60000);
+    when=iso.slice(8,10)+'.'+iso.slice(5,7)+'. '+iso.slice(11,16)+' UTC, '+(age<1?'gerade eben':'vor '+(age>=60?Math.floor(age/60)+' h '+(age%60)+' min':age+' min'));
+    if(age>=90) warn='<div class="alert">Die Meldung ist älter als 90 Minuten. Prüfe, ob es ein neueres METAR gibt.</div>';
+  }
+  const wind = d.wspd===undefined ? '–' : (d.wdir==='VRB'?'variabel':(typeof d.wdir==='number'?fmt(d.wdir)+'°':'–'))+' / '+fmt(d.wspd)+' kt'+(d.wgst?' (Böen '+fmt(d.wgst)+' kt)':'');
+  let extra='';
+  if(d.wdir==='VRB') extra+='<div class="alert">Wind variabel: Windrichtung bitte selbst eintragen.</div>';
+  if(d.wgst && d.wgst>=(d.wspd||0)+10) extra+='<div class="alert">Starke Böen. Die Rechnung nutzt den mittleren Wind. Plane für Seitenwind und Landung mit Zuschlag.</div>';
+  if(Number.isFinite(d.elev)) extra+='<p class="sub" style="margin:6px 0 0">Platzhöhe aus der Wetterstation übernommen ('+fmt(d.elev*3.28084)+' ft). Bitte mit der AIP vergleichen.</p>';
+  return `<div class="card ok"><h3>METAR von ${esc(d.icao||'?')}${d.name?' · '+esc(d.name):''}</h3>
+    <div class="sub">${when}</div>
+    <div class="mono">${esc(d.raw||'')}</div>
+    <table><tr><td>QNH</td><td>${Number.isFinite(d.qnh)?Math.round(d.qnh)+' hPa':'–'}</td></tr>
+    <tr><td>Temperatur</td><td>${Number.isFinite(d.temp)?fmt(d.temp)+' °C':'–'}</td></tr>
+    <tr><td>Wind</td><td>${wind}</td></tr></table>${extra}
+    <p class="sub" style="margin:6px 0 0">Übernommen in die Felder unten. Pistenrichtung, Länge und Neigung trägst du selbst ein.</p></div>${warn}`;
+}
+
+/* ---------- 3D-Ansicht ---------- */
+const SC={mode:'to',t:1,playing:false,raf:0,t0:0,dur:7000};
+const LAST={};
+const clampv=(v,a,b)=>Math.min(Math.max(v,a),b);
+const V={
+  sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+  norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];}
+};
+const DEG=Math.PI/180;
+
+function scenePlan(){
+  const pf=LAST.pf; if(!pf) return null;
+  const p=S.p, to=SC.mode==='to', r=to?pf.to:pf.ld;
+  const L=Math.max(to?p.tora:p.lda,50);
+  const roll=Math.max(r.roll,1), obs=Math.max(r.obs,roll+1), req=r.req;
+  const pl={to,L,roll,obs,req};
+  pl.yEx=clampv(L/100,3,8); pl.s=clampv(L/110,4,10); pl.wid=clampv(L*0.07,40,80);
+  if(to){
+    const slope=15/(obs-roll);
+    pl.xa=-0.06*L; pl.xb=Math.max(1.12*L,obs*1.08,roll*1.08,req*1.04);
+    pl.h=x=>x<=roll?0:(x<=obs?15*(x-roll)/(obs-roll):15+slope*(x-obs));
+    const climb=Math.min(Math.atan(slope*pl.yEx),16*DEG), rl=Math.max(0.12*roll,10);
+    pl.pitch=x=>x<roll-rl?0:(x<roll?climb*(x-(roll-rl))/rl:climb);
+    const xF=pl.xb-0.04*(pl.xb-pl.xa), uA=2*roll/(xF+roll);
+    pl.x=u=>u<uA?roll*Math.pow(u/uA,2):roll+(xF-roll)*((u-uA)/(1-uA));
+    pl.marks=[['Abheben',roll,'--ok',5],['15 m',obs,'--acc',15],['+Faktor',req,'--warn',5],['Bahnende',L,'--bad',5]];
+  }else{
+    const xtd=Math.max(obs-roll,1), stop=obs; pl.xtd=xtd; pl.stop=stop;
+    pl.xa=-300; pl.xb=Math.max(1.12*L,stop*1.08,req*1.04);
+    pl.h=x=>x<0?15-x*0.0524:(x<xtd?15*(1-x/xtd):0);
+    pl.pitch=x=>x<0?-3*DEG:(x<xtd?(-3+8*x/xtd)*DEG:5*DEG*(1-Math.min((x-xtd)/30,1)));
+    const xS=pl.xa+10, D1=xtd-xS, D2=Math.max(stop-xtd,1), uA=D1/(D1+2*D2);
+    pl.x=u=>u<uA?xS+D1*(u/uA):xtd+D2*(1-Math.pow(1-(u-uA)/(1-uA),2));
+    pl.marks=[['Aufsetzen',xtd,'--ok',5],['Stillstand',stop,'--acc',5],['+Faktor',req,'--warn',5],['Bahnende',L,'--bad',5]];
+  }
+  return pl;
+}
+
+function sceneInfo(){
+  const pl=scenePlan(), el=$('#sceneInfo'); if(!pl||!el) return;
+  let t='';
+  if(pl.to){
+    if(pl.roll>pl.L) t='Kein Abheben vor dem Bahnende: Die Rollstrecke ('+fmt(pl.roll)+' m) ist länger als die Bahn ('+fmt(pl.L)+' m). Nicht starten.';
+    else{
+      t='Abheben nach '+fmt(pl.roll)+' m ('+fmt(pl.roll/pl.L*100)+' % der Bahn). ';
+      t+= pl.obs<=pl.L ? '15 m Höhe sind bei '+fmt(pl.obs)+' m erreicht, '+fmt(pl.L-pl.obs)+' m vor dem Bahnende.'
+        : 'Am Bahnende ist das Flugzeug erst etwa '+fmt(pl.h(pl.L),1)+' m hoch. 15 m werden '+fmt(pl.obs-pl.L)+' m hinter dem Bahnende erreicht.';
+    }
+    t+=' Mit Sicherheitsfaktor wären '+fmt(pl.req)+' m nötig.';
+  }else{
+    t='Aufsetzen '+fmt(pl.xtd)+' m hinter der Schwelle ('+fmt(pl.xtd/pl.L*100)+' % der Bahn), Stillstand nach '+fmt(pl.stop)+' m. ';
+    t+= pl.stop<=pl.L ? 'Rest bis zum Bahnende: '+fmt(pl.L-pl.stop)+' m.' : 'Das sind '+fmt(pl.stop-pl.L)+' m über das Bahnende hinaus.';
+    t+=' Mit Sicherheitsfaktor wären '+fmt(pl.req)+' m nötig. Annahme: Schwelle in 15 m Höhe, Anflug etwa 3°.';
+  }
+  el.textContent=t+' Die Höhe ist '+fmt(pl.yEx)+'-fach überhöht dargestellt, die Steigung vereinfacht.';
+}
+
+const MODEL=[
+  {c:'#e8eef4',shadow:true,pts:[[4.5,0,0],[2,0.9,0],[-2,0.8,0],[-6.5,0.5,0],[-6.5,-0.2,0],[-2,-0.8,0],[2,-0.7,0]]},
+  {c:'#ffffff',shadow:true,pts:[[-5.6,0.3,-2],[-6.6,0.3,-2],[-6.6,0.3,2],[-5.6,0.3,2]]},
+  {c:'#ffffff',shadow:true,pts:[[1.2,0.9,-5.5],[-0.4,0.9,-5.5],[-0.4,0.9,5.5],[1.2,0.9,5.5]]},
+  {c:'#1f5f99',shadow:false,pts:[[-4.6,0.5,0],[-6.6,0.5,0],[-6.6,2.2,0],[-5.6,2.2,0]]}
+];
+
+function drawScene(){
+  const cv=$('#scene'); if(!cv||!cv.clientWidth) return;
+  const pl=scenePlan(); if(!pl) return;
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); }
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const dark=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches;
+  const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const col={sky:dark?'#12202c':'#dfeaf2',grass:dark?'#1d3526':'#c9dfc2',rwy:dark?'#4a545e':'#69737d',mark:dark?'#d8dee4':'#f4f6f8',
+    ink:css('--ink'),surf:css('--surf'),mut:css('--mut'),ok:css('--ok'),bad:css('--bad'),warn:css('--warn'),acc:css('--acc')};
+  const {xa,xb,L,wid,yEx,s}=pl, span=xb-xa, xc=(xa+xb)/2, hl=span/2;
+
+  // Kamera: seitlich hinter und über der Piste
+  const C=[xc-hl*0.45,hl*0.8,-hl*0.75], T=[xc+hl*0.05,0,0];
+  const fwd=V.norm(V.sub(T,C)), right=V.norm(V.cross([0,1,0],fwd)), upv=V.cross(fwd,right);
+  const P=q=>{ const d=V.sub(q,C), z=V.dot(d,fwd); return [V.dot(d,right)/z,-V.dot(d,upv)/z,z]; };
+
+  // Ausschnitt automatisch einpassen
+  const fit=[[0,0,-wid/2],[0,0,wid/2],[L,0,-wid/2],[L,0,wid/2],[xa,0,0],[xb,0,0]];
+  for(let i=0;i<=30;i++){ const x=xa+span*i/30; fit.push([x,pl.h(x)*yEx+s*3,0]); }
+  pl.marks.forEach(m=>fit.push([m[1],m[3]*yEx,wid/2+8]));
+  let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+  fit.forEach(q=>{ const a=P(q); mnx=Math.min(mnx,a[0]);mxx=Math.max(mxx,a[0]);mny=Math.min(mny,a[1]);mxy=Math.max(mxy,a[1]); });
+  const top=26, mg=16, sc=Math.min((W-2*mg)/(mxx-mnx),(H-top-mg)/(mxy-mny));
+  const ox=W/2-(mnx+mxx)/2*sc, oy=top+(H-top-mg)/2-(mny+mxy)/2*sc;
+  const SP=q=>{ const a=P(q); return [ox+a[0]*sc,oy+a[1]*sc]; };
+  const poly=(pts,fill,stroke,lw)=>{ g.beginPath(); pts.forEach((q,i)=>{const a=SP(q); i?g.lineTo(a[0],a[1]):g.moveTo(a[0],a[1]);}); g.closePath(); if(fill){g.fillStyle=fill;g.fill();} if(stroke){g.lineWidth=lw||1;g.strokeStyle=stroke;g.stroke();} };
+  const line=(a,b,c,lw,dash)=>{ const p1=SP(a),p2=SP(b); g.beginPath(); g.setLineDash(dash||[]); g.moveTo(p1[0],p1[1]); g.lineTo(p2[0],p2[1]); g.lineWidth=lw; g.strokeStyle=c; g.stroke(); g.setLineDash([]); };
+
+  g.fillStyle=col.sky; g.fillRect(0,0,W,H);
+  poly([[xa-0.1*span,0,-0.6*hl],[xb+0.1*span,0,-0.6*hl],[xb+0.1*span,0,3*hl],[xa-0.1*span,0,3*hl]],col.grass);
+  poly([[0,0,-wid/2],[L,0,-wid/2],[L,0,wid/2],[0,0,wid/2]],col.rwy);
+  for(let i=0;i<5;i++){ const z=-wid/2+(i+0.5)*wid/5; line([2,0,z],[L*0.014+6,0,z],col.mark,1.5); }
+  const nd=Math.max(Math.round(L/60),6), dl=L/(nd*2);
+  for(let i=0;i<nd;i++){ const a=L*0.06+(L*0.88)*i/nd; line([a,0,0],[a+dl*0.9*0.88,0,0],col.mark,1.2); }
+  line([L,0,-wid/2],[L,0,wid/2],col.bad,3);
+
+  // Markierungen auf der Piste
+  pl.marks.forEach(m=>{ if(m[1]<L+0.01||true) line([m[1],0,-wid/2],[m[1],0,wid/2],col[m[2].slice(2)],2,m[0]==='+Faktor'?[4,3]:null); });
+
+  // Flugbahn
+  g.beginPath(); g.setLineDash([5,4]);
+  for(let i=0;i<=60;i++){ const x=xa+span*i/60, a=SP([x,pl.h(x)*yEx,0]); i?g.lineTo(a[0],a[1]):g.moveTo(a[0],a[1]); }
+  g.lineWidth=1.5; g.strokeStyle=col.acc; g.globalAlpha=0.6; g.stroke(); g.globalAlpha=1; g.setLineDash([]);
+
+  // Masten und Beschriftung
+  g.font='600 10.5px system-ui,sans-serif'; g.textAlign='center'; g.lineJoin='round';
+  pl.marks.forEach((m,i)=>{
+    const c=col[m[2].slice(2)], base=[m[1],0,wid/2+8], tip=[m[1],m[3]*yEx,wid/2+8];
+    line(base,tip,c,2);
+    const a=SP(tip); g.beginPath(); g.moveTo(a[0],a[1]); g.lineTo(a[0]+9,a[1]+4); g.lineTo(a[0],a[1]+8); g.closePath(); g.fillStyle=c; g.fill();
+    const txt=m[0]+' '+fmt(m[1])+' m', ty=a[1]-5-(i%2)*12;
+    g.lineWidth=3; g.strokeStyle=col.surf; g.strokeText(txt,a[0],ty); g.fillStyle=col.ink; g.fillText(txt,a[0],ty);
+  });
+
+  // Flugzeug
+  const xv=pl.x(SC.t), hv=pl.h(xv), pitch=pl.pitch(xv);
+  const cp=Math.cos(pitch), sp=Math.sin(pitch);
+  const place=(q,flat)=>{ const x=q[0]*s,y=q[1]*s,z=q[2]*s; return flat?[xv+x,0,z]:[xv+x*cp-y*sp, hv*yEx+0.9*s+x*sp+y*cp, z]; };
+  MODEL.forEach(m=>{ if(m.shadow) poly(m.pts.map(q=>place(q,true)),'rgba(0,0,0,0.28)'); });
+  if(hv>0.5) line([xv,0,0],[xv,hv*yEx,0],col.mut,1,[2,3]);
+  MODEL.forEach(m=>poly(m.pts.map(q=>place(q,false)),m.c,'rgba(20,38,58,0.85)',0.8));
+
+  // Anzeige oben links
+  g.textAlign='left'; g.font='600 12px system-ui,sans-serif'; g.fillStyle=col.ink;
+  const where = xv<0 ? fmt(-xv)+' m vor der Schwelle' : fmt(xv)+' m ('+fmt(xv/L*100)+' % der Bahn)';
+  g.fillText(where+' · Höhe '+fmt(hv,1)+' m',10,17);
+}
+
+function play(){
+  cancelAnimationFrame(SC.raf);
+  SC.t=0; SC.playing=true; SC.t0=performance.now();
+  const step=now=>{
+    SC.t=Math.min((now-SC.t0)/SC.dur,1);
+    drawScene();
+    if(SC.t<1) SC.raf=requestAnimationFrame(step); else SC.playing=false;
+  };
+  SC.raf=requestAnimationFrame(step);
+}
+
+const STORE_KEY='fv_state_v1';
+function saveState(){
+  try{ localStorage.setItem(STORE_KEY,JSON.stringify({hangar:S.hangar,cur:S.cur,f:S.f,p:S.p,u:S.u,icao:S.w.icao})); }catch(_){}
+}
+function loadState(){
+  try{
+    const o=JSON.parse(localStorage.getItem(STORE_KEY)||'null');
+    if(!o||!Array.isArray(o.hangar)||!o.hangar.length) return;
+    S.hangar=o.hangar.map(x=>Object.assign(JSON.parse(JSON.stringify(EXAMPLE)),x));
+    S.cur=Math.min(Math.max(o.cur|0,0),S.hangar.length-1); S.ac=S.hangar[S.cur];
+    Object.assign(S.f,o.f||{}); Object.assign(S.p,o.p||{}); Object.assign(S.u,o.u||{});
+    S.w.icao=o.icao||'';
+  }catch(_){}
+}
+function useAircraft(i){
+  S.cur=i; S.ac=S.hangar[i]; S.pendingDel=-1;
+  $('#envText').value=S.ac.env.map(p=>p[0]+'; '+p[1]).join('\n');
+  update();
+}
+loadState();
+build();
+update();
+if(typeof navigator!=='undefined' && 'serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
