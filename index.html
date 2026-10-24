@@ -236,6 +236,7 @@ const EXAMPLE = JSON.parse(JSON.stringify(S.ac));
 S.ac = C152;
 S.f = {w:[80,70,5,0], loaded:50};
 S.p.tora = 800; S.p.lda = 800;
+S.p.wcorr = 0;
 S.w = {icao:'', state:'idle', data:null, errMsg:''};
 S.set = {proxy:''};
 S.hangar = [S.ac];
@@ -294,6 +295,11 @@ function build(){
     </div>
     <h2>Piste &amp; Wind</h2>
     <div class="grid">
+      <label class="fld"><span>Piste wählen</span><div class="inp"><select id="rwySel"><option value="">erst Pisten laden</option></select></div></label>
+      <div class="fld"><span>&nbsp;</span><button class="btn" id="loadRwy" style="width:100%;height:44px">Pisten laden</button></div>
+    </div>
+    <div id="rwyInfo"></div>
+    <div class="grid">
       ${field('Pistenrichtung','p.rwy',{unit:'°'})}
       ${field('Neigung (+ bergauf)','p.slope',{unit:'%',step:'0.1'})}
       ${field('Wind aus','p.wd',{unit:'°'})}
@@ -302,6 +308,7 @@ function build(){
       ${field('Verfügbar Landung (LDA)','p.lda',{unit:'m'})}
       ${field('Sicherheitsfaktor Start','p.sfTO',{step:'0.05'})}
       ${field('Sicherheitsfaktor Landung','p.sfLD',{step:'0.05'})}
+      <div id="wcorrBox" class="full" style="display:none">${sel('Masse bei den Strecken','p.wcorr',[[0,'Aus: Tabellenwert für max. Masse (POH)'],[1,'Näherung: tatsächliche Masse anrechnen']])}</div>
     </div>
     <p class="note">Start- und Landemasse kommen automatisch aus dem Reiter W&amp;B.</p>
     <div id="perfResA"></div>
@@ -520,10 +527,12 @@ function calcPerf(wb){
     const T=a.tab, amax=T.alts[T.alts.length-1], tmax=T.temps[T.temps.length-1];
     const paC=clampv(pa,T.alts[0],amax), tC=clampv(p.oat,T.temps[0],tmax);
     const beyond = pa>amax || p.oat>tmax;
-    const fSl = (up)=> up;
-    const mkT=(rollT,obsT,grass,col,slopeF,sf,avail)=>{
-      let roll=interp2(T.alts,T.temps,rollT,paC,tC)*fWind*slopeF;
-      let obs=interp2(T.alts,T.temps,obsT,paC,tC)*fWind*slopeF;
+    const useW = p.wcorr===1;
+    const fWt = useW ? Math.pow(Math.min(wb.tow.m,a.mtow)/a.mtow,2) : 1;
+    const fWl = useW ? Math.min(wb.lw.m,a.mlw)/a.mlw : 1;
+    const mkT=(rollT,obsT,grass,col,slopeF,sf,avail,fW)=>{
+      let roll=interp2(T.alts,T.temps,rollT,paC,tC)*fWind*slopeF*fW;
+      let obs=interp2(T.alts,T.temps,obsT,paC,tC)*fWind*slopeF*fW;
       if(p.surf>=2){
         const add=roll*grass; roll+=add; obs+=add;
         const extra = p.surf>=3 ? SURF[p.surf][col]/SURF[2][col] : 1;
@@ -533,9 +542,9 @@ function calcPerf(wb){
       if(req>avail) st = obs<=avail ? 'warn' : 'bad';
       return {roll,obs,req,avail,st,margin:avail-req};
     };
-    return {pa,da,hw,xw,table:true,beyond,
-      to:mkT(T.toRoll,T.toObs,T.grassTO,1,fSlTO,p.sfTO,p.tora),
-      ld:mkT(T.ldRoll,T.ldObs,T.grassLD,2,fSlLD,p.sfLD,p.lda)};
+    return {pa,da,hw,xw,table:true,beyond,useW,
+      to:mkT(T.toRoll,T.toObs,T.grassTO,1,fSlTO,p.sfTO,p.tora,fWt),
+      ld:mkT(T.ldRoll,T.ldObs,T.grassLD,2,fSlLD,p.sfLD,p.lda,fWl)};
   }
   return {pa,da,hw,xw,
     to:mk(a.toRoll,a.toObs,kTO,p.sfTO,p.tora),
@@ -607,7 +616,7 @@ function update(){
   if(pf.hw<0 && -pf.hw>10) warn+=`<div class="alert">Rückenwind über 10 kt. Handbuchwerte reichen meist nicht aus, Piste wechseln.</div>`;
   if(Math.abs(pf.xw)>a.maxXw) warn+=`<div class="alert bad">Seitenwind über Maximum von ${fmt(a.maxXw)} kt.</div>`;
   if(pf.beyond) warn+=`<div class="alert bad">Druckhöhe oder Temperatur über dem Tabellenbereich des POH. Gerechnet ist die Obergrenze, die wirkliche Strecke ist länger.</div>`;
-  if(pf.table) warn+=`<div class="alert">Werte aus den POH-Tabellen: Kurzstart mit Klappen 10° und Vollgas vor Bremsenlösen, Kurzlandung mit Klappen 30° und bestmöglichem Bremsen. Es gibt keine Tabelle für andere Massen, daher keine Anrechnung für leichtere Masse.</div>`;
+  if(pf.table) warn+=`<div class="alert">Werte aus den POH-Tabellen: Kurzstart mit Klappen 10° und Vollgas vor Bremsenlösen, Kurzlandung mit Klappen 30° und bestmöglichem Bremsen. ${pf.useW?'Leichtere Masse ist als Näherung angerechnet (Start nach Masse zum Quadrat, Landung linear). Das steht nicht im POH, nutze es mit Vorsicht.':'Das POH hat keine Tabelle für andere Massen, deshalb gilt der Wert für die Maximalmasse. Du kannst oben eine Näherung für leichtere Masse einschalten.'}</div>`;
   const side = pf.xw>=0 ? 'von rechts' : 'von links';
   LAST.pf=pf; LAST.wb=wb;
   $('#perfResA').innerHTML = `
@@ -617,7 +626,7 @@ function update(){
       <tr><td>Dichtehöhe</td><td>${fmt(pf.da)} ft</td></tr>
       <tr><td>${pf.hw>=0?'Gegenwind':'Rückenwind'}</td><td>${fmt(Math.abs(pf.hw),1)} kt</td></tr>
       <tr><td>Seitenwind</td><td>${fmt(Math.abs(pf.xw),1)} kt ${side}</td></tr>
-      ${pf.table?'<tr><td>Grundlage</td><td>POH-Tabelle</td></tr>':''}
+      ${pf.table?'<tr><td>Grundlage</td><td>POH-Tabelle</td></tr><tr><td>Rechenmasse Strecken</td><td>'+(pf.useW?fmt(wb.tow.m)+' / '+fmt(wb.lw.m)+' kg (Näherung)':fmt(a.mtow)+' kg (Tabellenwert)')+'</td></tr>':''}
       <tr><td>Startmasse / Landemasse</td><td>${fmt(wb.tow.m)} / ${fmt(wb.lw.m)} kg</td></tr>
     </table></div>`;
   $('#perfResB').innerHTML = `
@@ -692,7 +701,9 @@ function update(){
 
   const tn=$('#tabNote'); if(tn) tn.innerHTML = a.tab ? '<div class="alert">Dieses Flugzeug rechnet mit den hinterlegten Tabellen: '+esc(a.tab.src)+'. Die Referenzwerte unten werden dann nicht verwendet.</div>' : '';
   /* Wetter & Ansicht */
+  const wb2=$('#wcorrBox'); if(wb2) wb2.style.display = a.tab ? '' : 'none';
   $('#wxInfo').innerHTML = renderWx();
+  $('#rwyInfo').innerHTML = renderRwy(); syncRwySelect();
   if(!SC.playing) SC.t = 1;
   sceneInfo(); drawScene();
 
@@ -718,7 +729,7 @@ document.addEventListener('input',e=>{
   else { const v=parseFloat(String(el.value).replace(',','.')); set(el.dataset.bind,isFinite(v)?v:0); }
   update();
 });
-document.addEventListener('change',e=>{ if(e.target.dataset.bind) { if(e.target.tagName==='SELECT'){ set(e.target.dataset.bind,parseFloat(e.target.value)); } update(); }});
+document.addEventListener('change',e=>{ if(e.target.id==='rwySel'){ chooseRunway(e.target.value===''?-1:parseInt(e.target.value,10)); return; } if(e.target.dataset.bind) { if(e.target.tagName==='SELECT'){ set(e.target.dataset.bind,parseFloat(e.target.value)); } update(); }});
 document.addEventListener('keydown',e=>{ if(e.key==='Enter' && e.target.dataset && e.target.dataset.bind==='w.icao') loadMetar(); });
 window.addEventListener('resize',()=>drawScene());
 $('#nav').addEventListener('click',e=>{
@@ -740,6 +751,9 @@ document.addEventListener('click',e=>{
   if(idc==='openLegal3'){ e.preventDefault(); showLegal(); return; }
   if(idc==='closeLegal'){ $('#legal').classList.remove('on'); return; }
   if(idc==='acceptAck'){ try{ localStorage.setItem(ACK_KEY,LEGAL.version); }catch(_){} $('#ack').classList.remove('on'); return; }
+  if(e.target.id==='loadRwy') loadRunways(false);
+  if(e.target.id==='refreshRwy'){ e.preventDefault(); loadRunways(true); return; }
+  if(e.target.id==='applyElev'){ S.p.elev=S.rwy.maxElev; update(); return; }
   if(e.target.id==='loadMetar') loadMetar();
   if(e.target.id==='applyRaw') applyRawMetar();
   if(e.target.id==='replay') play();
@@ -811,6 +825,116 @@ function applyWx(w){
   if(Number.isFinite(w.elev)) S.p.elev=Math.round(w.elev*3.28084);
   S.w.state='ok'; S.w.data=w; update();
 }
+
+/* ---------- Pistendaten (OurAirports) ---------- */
+const RWY_URL='https://davidmegginson.github.io/ourairports-data/runways.csv';
+S.rwy={state:'idle',msg:'',list:[],chosen:-1,icao:'',date:'',dirty:false,maxElev:null};
+function csvSplit(line){
+  const out=[]; let cur='',q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(q){ if(c==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ out.push(cur); cur=''; }
+    else cur+=c;
+  }
+  out.push(cur); return out;
+}
+function parseRunways(text,ident){
+  const lines=text.split(/\r?\n/), ix={};
+  csvSplit(lines[0]||'').forEach((h,i)=>ix[h]=i);
+  const need=['airport_ident','length_ft','surface','closed','le_ident','le_elevation_ft','he_ident','he_elevation_ft'];
+  if(need.some(k=>ix[k]===undefined)) throw new Error('Datenformat unbekannt');
+  const key=',"'+ident+'",', num=v=>(v===undefined||v==='')?NaN:parseFloat(v);
+  const list=[]; let maxElev=null;
+  for(let i=1;i<lines.length;i++){
+    const ln=lines[i]; if(ln.indexOf(key)<0) continue;
+    const f=csvSplit(ln); if(f[ix.airport_ident]!==ident||f[ix.closed]==='1') continue;
+    const len=num(f[ix.length_ft]), le=f[ix.le_ident], he=f[ix.he_ident];
+    const eLe=num(f[ix.le_elevation_ft]), eHe=num(f[ix.he_elevation_ft]);
+    [eLe,eHe].forEach(e=>{ if(Number.isFinite(e)) maxElev=maxElev===null?e:Math.max(maxElev,e); });
+    const mk=(id,opp,e,eo)=>{
+      if(!id) return;
+      const m=id.match(/^(\d{1,2})/);
+      let slope=(Number.isFinite(e)&&Number.isFinite(eo)&&len>0)?(eo-e)/len*100:null;
+      list.push({ident:id,opp,runway:(le&&he)?le+'/'+he:id,lenM:Number.isFinite(len)?len*0.3048:null,
+        hdg:m?parseInt(m[1],10)*10:null,elev:e,oppElev:eo,slope,surface:f[ix.surface]||''});
+    };
+    mk(le,he,eLe,eHe); mk(he,le,eHe,eLe);
+  }
+  list.sort((a,b)=>a.ident.localeCompare(b.ident,undefined,{numeric:true}));
+  return {list,maxElev};
+}
+async function getRunwayCsv(force){
+  let cache=null; try{ cache=await caches.open('fv-data-v1'); }catch(_){}
+  if(cache && !force){
+    const hit=await cache.match(RWY_URL);
+    if(hit) return {text:await hit.text(),date:hit.headers.get('x-fv-date')||''};
+  }
+  const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(),90000);
+  let r; try{ r=await fetch(RWY_URL,{signal:ctrl.signal}); } finally { clearTimeout(to); }
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const text=await r.text(), date=new Date().toISOString().slice(0,10);
+  if(cache){ try{ await cache.put(RWY_URL,new Response(text,{headers:{'content-type':'text/csv','x-fv-date':date}})); }catch(_){} }
+  return {text,date};
+}
+async function loadRunways(force){
+  const id=(S.w.icao||'').trim().toUpperCase(), R=S.rwy;
+  if(!/^[A-Z0-9]{3,4}$/.test(id)){ R.state='err'; R.msg='Bitte oben den ICAO-Code des Platzes eingeben.'; return update(); }
+  R.state='loading'; R.msg=''; update();
+  try{
+    const {text,date}=await getRunwayCsv(force);
+    const res=parseRunways(text,id);
+    R.icao=id; R.date=date; R.maxElev=res.maxElev; R.list=res.list; R.chosen=-1; R.dirty=true;
+    if(!res.list.length){ R.state='err'; R.msg='Für '+id+' sind keine Pisten in der Datenbank. Bitte Piste und Neigung selbst eintragen.'; }
+    else R.state='ok';
+  }catch(e){
+    R.state='err';
+    R.msg='Die Pistendaten konnten nicht geladen werden. Prüfe das Internet. In einer Vorschau (z. B. in der Claude-App) sind Verbindungen nach außen gesperrt. Öffne die App über Safari oder das Home-Bildschirm-Symbol.';
+  }
+  update();
+}
+function chooseRunway(i){
+  const R=S.rwy, e=R.list[i]; if(!e) return;
+  R.chosen=i;
+  if(e.hdg!==null) S.p.rwy=e.hdg;
+  S.p.slope = (e.slope!==null && Math.abs(e.slope)<=3) ? Math.round(e.slope*100)/100 : 0;
+  update();
+}
+function syncRwySelect(){
+  const R=S.rwy, sel=$('#rwySel'); if(!sel) return;
+  if(R.dirty){
+    R.dirty=false;
+    sel.innerHTML='<option value="">'+(R.list.length?'Piste wählen':'erst Pisten laden')+'</option>'+
+      R.list.map((e,i)=>'<option value="'+i+'">'+esc(e.ident)+'  ('+esc(e.runway)+(e.lenM?', '+fmt(e.lenM)+' m':'')+')</option>').join('');
+  }
+  sel.value = R.chosen>=0 ? String(R.chosen) : '';
+}
+function renderRwy(){
+  const R=S.rwy;
+  if(R.state==='loading') return '<p class="note">Lade Pistendaten. Beim ersten Mal ist die Datei einige MB groß und wird danach auf dem Gerät gespeichert.</p>';
+  if(R.state==='err') return '<div class="alert bad">'+esc(R.msg)+'</div>';
+  if(R.state!=='ok') return '<p class="note">ICAO-Code oben eingeben und „Pisten laden“ tippen. Dann wählst du die Piste, und Richtung und Neigung werden eingetragen.</p>';
+  const e=R.list[R.chosen];
+  let body='';
+  if(e){
+    const f=v=>Number.isFinite(v)?fmt(v)+' ft':'unbekannt';
+    let sl;
+    if(e.slope===null) sl='<div class="alert">Für diese Piste sind keine Schwellenhöhen hinterlegt. Die Neigung steht auf 0 %, bitte selbst eintragen.</div>';
+    else if(Math.abs(e.slope)>3) sl='<div class="alert bad">Die Datenbank ergibt '+fmt(e.slope,2)+' %. Das ist unplausibel und wurde nicht übernommen. Die Neigung steht auf 0 %, bitte selbst eintragen.</div>';
+    else sl='<p class="sub" style="margin:6px 0 0">Neigung '+(e.slope>=0?'+':'')+fmt(e.slope,2)+' % ('+(e.slope>=0?'bergauf':'bergab')+' in Richtung '+esc(e.ident)+') übernommen.</p>';
+    body='<table><tr><td>Piste</td><td>'+esc(e.ident)+' ('+esc(e.runway)+')</td></tr>'+
+      '<tr><td>Länge laut Datenbank</td><td>'+(e.lenM?fmt(e.lenM)+' m':'–')+'</td></tr>'+
+      '<tr><td>Belag laut Datenbank</td><td>'+esc(e.surface||'–')+'</td></tr>'+
+      '<tr><td>Höhe Schwelle '+esc(e.ident)+' / '+esc(e.opp)+'</td><td>'+f(e.elev)+' / '+f(e.oppElev)+'</td></tr></table>'+sl+
+      '<p class="sub" style="margin:6px 0 0">Pistenrichtung '+(e.hdg!==null?fmt(e.hdg)+'° (aus der Pistennummer)':'bitte selbst eintragen')+' übernommen. Verfügbare Strecken (TORA/LDA) trägst du selbst ein, die Datenbanklänge enthält keine Abzüge.</p>';
+  }
+  let elev='';
+  if(R.maxElev!==null) elev='<div class="row"><button class="btn sec small" id="applyElev">Platzhöhe '+fmt(R.maxElev)+' ft übernehmen</button></div><p class="sub" style="margin:0">Höchste Schwellenhöhe der Datenbank. Mit der AIP vergleichen.</p>';
+  return '<div class="card ok"><h3>Pisten von '+esc(R.icao)+'</h3>'+(body||'<p class="sub" style="margin:0">'+R.list.length+' Pistenenden gefunden. Wähle oben eine Piste.</p>')+elev+
+    '<p class="sub" style="margin:8px 0 0">Quelle: OurAirports (offene Daten, ohne Gewähr)'+(R.date?', Stand '+esc(R.date):'')+'. <a href="#" id="refreshRwy">Neu laden</a></p></div>';
+}
+
 const awcUrl=id=>'https://aviationweather.gov/api/data/metar?ids='+id+'&format=json';
 function metarSources(id){
   const list=[], px=((S.set&&S.set.proxy)||'').trim();
@@ -897,6 +1021,7 @@ function renderWx(){
   let extra='';
   if(d.wdir==='VRB') extra+='<div class="alert">Wind variabel: Windrichtung bitte selbst eintragen.</div>';
   if(d.wgst && d.wgst>=(d.wspd||0)+10) extra+='<div class="alert">Starke Böen. Die Rechnung nutzt den mittleren Wind. Plane für Seitenwind und Landung mit Zuschlag.</div>';
+  if(!Number.isFinite(d.elev)) extra+='<div class="alert">Die Platzhöhe kommt aus dieser Quelle nicht mit. Aktuell eingetragen: '+fmt(S.p.elev)+' ft. Bitte mit der AIP vergleichen, sie bestimmt die Strecken stark.</div>';
   if(Number.isFinite(d.elev)) extra+='<p class="sub" style="margin:6px 0 0">Platzhöhe aus der Wetterstation übernommen ('+fmt(d.elev*3.28084)+' ft). Bitte mit der AIP vergleichen.</p>';
   return `<div class="card ok"><h3>METAR von ${esc(d.icao||'?')}${d.name?' · '+esc(d.name):''}</h3>
     <div class="sub">${when}</div>
@@ -1056,7 +1181,7 @@ function play(){
 
 
 /* ---------- Info & Recht ---------- */
-const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.4',date:'Oktober 2026'};
+const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.7',date:'Oktober 2026'};
 function legalHTML(){
   const ph=t=>/^\[/.test(t)?'<span class="ph">'+esc(t)+'</span>':esc(t);
   return `
@@ -1091,6 +1216,7 @@ function legalHTML(){
     <li><b>Bereitstellung der Seite:</b> Beim Aufruf verarbeitet der Hostinganbieter technisch notwendige Verbindungsdaten (z. B. IP-Adresse, Zeitpunkt, abgerufene Datei). Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (sichere und stabile Bereitstellung). Je nach Anbieter kann eine Verarbeitung in den USA stattfinden.</li>
     <li><b>Zugangsschutz:</b> Falls der Zugang per E-Mail-Adresse geschützt ist, wird deine E-Mail-Adresse zur Zugangsprüfung verarbeitet.</li>
     <li><b>METAR-Abruf:</b> Nur wenn du „METAR laden“ tippst, wird der eingegebene ICAO-Code, technisch bedingt auch deine IP-Adresse, an aviationweather.gov (NOAA, USA) übermittelt. Schlägt das fehl, kann die Anfrage über Ersatzdienste laufen (metar.vatsim.net, corsproxy.io, api.allorigins.win) oder über einen von dir eingetragenen Proxy. Rechtsgrundlage ist die von dir ausgelöste Funktion (Art. 6 Abs. 1 lit. b bzw. f DSGVO).</li>
+    <li><b>Pistendaten:</b> Tippst du auf „Pisten laden“, wird die öffentliche Datei runways.csv von davidmegginson.github.io (GitHub Pages) geladen. Dabei wird deine IP-Adresse übermittelt, der ICAO-Code nicht. Die Datei wird zur Wiederverwendung auf deinem Gerät zwischengespeichert.</li>
     <li><b>Keine Cookies, kein Tracking, keine Werbung.</b> Der lokale Speicher wird nur für die Funktion der App genutzt.</li>
     <li><b>Deine Rechte:</b> Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Widerspruch und Beschwerde bei einer Datenschutzaufsichtsbehörde.</li>
   </ul>
@@ -1100,7 +1226,7 @@ function legalHTML(){
   <p>Private, nicht gewerbliche Bereitstellung. Der Anbieter ist kein Luftfahrtunternehmen und keine Behörde. Die App ist keine zugelassene Luftfahrtunterlage.</p>
 
   <h3 id="lg-quellen">Quellen</h3>
-  <p>Wetterdaten: NOAA Aviation Weather Center (aviationweather.gov). Flugzeugdaten: Beispielwerte oder Eingaben der Nutzenden. Berechnungen: eigene Umsetzung.</p>`;
+  <p>Wetterdaten: NOAA Aviation Weather Center (aviationweather.gov). Pistendaten: OurAirports (ourairports.com, gemeinfrei, ohne Gewähr). Flugzeugdaten: Beispielwerte oder Eingaben der Nutzenden. Berechnungen: eigene Umsetzung.</p>`;
 }
 function legalTabHTML(){
   const parts=legalHTML().split(/(?=<h3 id=)/), head=parts.shift(), by={};
