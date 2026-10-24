@@ -105,8 +105,8 @@ button{font:inherit;cursor:pointer}
 textarea{width:100%;min-height:96px;font:14px ui-monospace,Menlo,monospace;background:var(--surf);color:var(--ink);
   border:1px solid var(--line);border-radius:10px;padding:10px}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--surf);border-top:1px solid var(--line);display:grid;
-  grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom);z-index:6}
-nav button{background:none;border:0;color:var(--mut);padding:10px 2px 9px;font-size:13px;display:flex;flex-direction:column;
+  grid-template-columns:repeat(6,1fr);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{background:none;border:0;color:var(--mut);padding:10px 1px 9px;font-size:12px;display:flex;flex-direction:column;
   align-items:center;gap:3px;border-top:3px solid transparent}
 nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button.on{color:var(--acc);border-top-color:var(--acc);font-weight:650}
@@ -130,12 +130,22 @@ details.det textarea{margin-top:8px}
   canvas#scene{height:420px}
   svg.env{max-height:520px}
 }
+.sheet{position:fixed;inset:0;z-index:30;background:var(--bg);overflow-y:auto;display:none;-webkit-overflow-scrolling:touch}
+.sheet.on{display:block}
+.sheet-in{max-width:760px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
+.sheet-top{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
+.legal h3{font-size:16px;margin:22px 0 6px;scroll-margin-top:120px}
+.legal p,.legal li{font-size:14.5px}
+.legal ul{padding-left:20px;margin:6px 0}
+.legal .ph{background:var(--warnbg);border-radius:4px;padding:0 3px}
+.info{flex:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--acc);font:italic 700 16px Georgia,serif;padding:0}
+a{color:var(--acc)}
 button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 </style>
 </head>
 <body>
 <header class="top">
-  <div class="title"><b id="acTitle">Flugvorbereitung</b><span>Flugvorbereitung</span></div>
+  <div class="title"><b id="acTitle">Flugvorbereitung</b><div style="display:flex;align-items:center;gap:10px"><span>Inoffizielle Planungshilfe</span><button class="info" id="openLegal" aria-label="Info und Recht">i</button></div></div>
   <div class="chips" id="chips"></div>
 </header>
 
@@ -145,7 +155,26 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
   <section class="pane" id="tab-fuel"></section>
   <section class="pane" id="tab-ac"></section>
   <section class="pane" id="tab-hangar"></section>
+  <section class="pane" id="tab-info"></section>
+  <p class="note" style="text-align:center">Inoffizielle Planungshilfe, keine amtliche Unterlage. <a href="#" id="openLegal2">Info &amp; Recht</a></p>
 </main>
+
+<div class="sheet" id="ack"><div class="sheet-in legal">
+  <h2 style="margin-top:20px">Wichtiger Hinweis</h2>
+  <p>Diese App ist eine <b>private, inoffizielle Planungshilfe</b>. Sie ist keine amtliche oder zugelassene Unterlage und ersetzt weder das Flughandbuch (AFM/POH) und das Wiege- und Beladeprotokoll deines Luftfahrzeugs noch AIP, NOTAM oder eine amtliche Flugwetterberatung.</p>
+  <ul>
+    <li>Alle Berechnungen sind Näherungen und können Fehler enthalten. Prüfe Ergebnisse, Eingaben und Flugzeugdaten immer selbst anhand der offiziellen Unterlagen.</li>
+    <li>Flugzeugdaten (Massen, Hebelarme, Leistungstabellen) sind Beispielwerte oder von dir eingetragen. Für ihre Richtigkeit bist du verantwortlich.</li>
+    <li>Die Entscheidung über Durchführung und Sicherheit eines Fluges liegt allein bei der verantwortlichen Luftfahrzeugführerin bzw. beim verantwortlichen Luftfahrzeugführer.</li>
+  </ul>
+  <p>Mit Tippen auf die Schaltfläche bestätigst du, dass du die <a href="#" id="openLegal3">Nutzungsbedingungen und den Haftungsausschluss</a> gelesen hast und die App auf eigene Verantwortung nutzt.</p>
+  <div class="row"><button class="btn" id="acceptAck">Verstanden und einverstanden</button></div>
+</div></div>
+
+<div class="sheet" id="legal"><div class="sheet-in">
+  <div class="sheet-top"><b>Info &amp; Recht</b><button class="btn small" id="closeLegal">Schließen</button></div>
+  <div class="legal" id="legalBody"></div>
+</div></div>
 
 <nav id="nav">
   <button data-tab="perf" class="on"><svg viewBox="0 0 24 24"><path d="M2 19h20M4 15l3-8 3 5 4-9 3 12"/></svg>Start/Ldg</button>
@@ -153,6 +182,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
   <button data-tab="fuel"><svg viewBox="0 0 24 24"><path d="M6 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16M4 21h13M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V9l-3-3M8 8h4"/></svg>Sprit</button>
   <button data-tab="ac"><svg viewBox="0 0 24 24"><path d="M21 15l-8-4V5a1 1 0 0 0-2 0v6l-8 4v2l8-2v4l-2 1.5V21l3-.8 3 .8v-1.5L13 18v-4l8 2z"/></svg>Daten</button>
   <button data-tab="hangar"><svg viewBox="0 0 24 24"><path d="M3 21V10l9-6 9 6v11M3 21h18M8 21v-7h8v7"/></svg>Hangar</button>
+  <button data-tab="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Impressum</button>
 </nav>
 
 <script>
@@ -207,6 +237,7 @@ S.ac = C152;
 S.f = {w:[80,70,5,0], loaded:50};
 S.p.tora = 800; S.p.lda = 800;
 S.w = {icao:'', state:'idle', data:null, errMsg:''};
+S.set = {proxy:''};
 S.hangar = [S.ac];
 S.cur = 0;
 S.pendingDel = -1;
@@ -371,9 +402,31 @@ function build(){
     <textarea id="json" spellcheck="false" placeholder="Hangar-Text"></textarea>
     <div class="row"><button class="btn sec" id="exp">Exportieren</button><button class="btn" id="imp">Importieren</button></div>
     <div class="note" id="impMsg"></div>
+    <h2>METAR-Abruf</h2>
+    <p class="note">Die App versucht mehrere Wege, bis ein METAR ankommt. Wenn du einen eigenen Proxy betreibst, trage ihn hier ein, z. B. https://dein-name.workers.dev/?ids={icao}</p>
+    <div class="grid">${field('Eigener Proxy (optional)','set.proxy',{text:1,full:1})}</div>
+    <h2>Info &amp; Recht</h2>
+    <p class="note">Die App ist eine inoffizielle Planungshilfe und ersetzt weder Flughandbuch noch amtliche Unterlagen. Hier findest du alle Angaben zu Haftung, Nutzung, Datenschutz und Anbieter.</p>
+    <div class="row">
+      <button class="btn sec small" data-legal="lg-haftung">Haftungsausschluss</button>
+      <button class="btn sec small" data-legal="lg-nutzung">Nutzungsbedingungen</button>
+      <button class="btn sec small" data-legal="lg-datenschutz">Datenschutz</button>
+      <button class="btn sec small" data-legal="lg-impressum">Impressum</button>
+    </div>
+    <p class="note">Version ${LEGAL.version}, ${LEGAL.date}</p>
     <h2>Zurücksetzen</h2>
     <p class="note">Löscht alle auf diesem Gerät gespeicherten Daten der App und stellt den Auslieferungszustand wieder her.</p>
     <button class="btn sec small del" id="resetAll">App-Daten löschen</button>`;
+
+  $('#tab-info').innerHTML = `
+    <h2>Impressum &amp; Recht</h2>
+    <div class="row">
+      <button class="btn sec small" data-legal="lg-impressum">Impressum</button>
+      <button class="btn sec small" data-legal="lg-haftung">Haftung</button>
+      <button class="btn sec small" data-legal="lg-nutzung">Nutzung</button>
+      <button class="btn sec small" data-legal="lg-datenschutz">Datenschutz</button>
+    </div>
+    <div class="legal">${legalTabHTML()}</div>`;
 
   document.querySelectorAll('[data-bind]').forEach(el=>{
     const p = el.dataset.bind;
@@ -681,6 +734,12 @@ document.addEventListener('click',e=>{
     try{ localStorage.removeItem(STORE_KEY); }catch(_){}
     location.reload(); return;
   }
+  if(e.target.dataset && e.target.dataset.legal){ gotoInfo(e.target.dataset.legal); return; }
+  const idc=e.target.id;
+  if(idc==='openLegal'||idc==='openLegal2'){ e.preventDefault(); gotoInfo('lg-impressum'); return; }
+  if(idc==='openLegal3'){ e.preventDefault(); showLegal(); return; }
+  if(idc==='closeLegal'){ $('#legal').classList.remove('on'); return; }
+  if(idc==='acceptAck'){ try{ localStorage.setItem(ACK_KEY,LEGAL.version); }catch(_){} $('#ack').classList.remove('on'); return; }
   if(e.target.id==='loadMetar') loadMetar();
   if(e.target.id==='applyRaw') applyRawMetar();
   if(e.target.id==='replay') play();
@@ -752,39 +811,65 @@ function applyWx(w){
   if(Number.isFinite(w.elev)) S.p.elev=Math.round(w.elev*3.28084);
   S.w.state='ok'; S.w.data=w; update();
 }
+const awcUrl=id=>'https://aviationweather.gov/api/data/metar?ids='+id+'&format=json';
+function metarSources(id){
+  const list=[], px=((S.set&&S.set.proxy)||'').trim();
+  if(px){
+    const u = px.includes('{icao}') ? px.replace('{icao}',id) : px.includes('{url}') ? px.replace('{url}',encodeURIComponent(awcUrl(id))) : px+encodeURIComponent(awcUrl(id));
+    list.push({name:'eigener Proxy',url:u,kind:'awc',third:false});
+  }
+  list.push({name:'aviationweather.gov',url:awcUrl(id),kind:'awc',third:false});
+  list.push({name:'metar.vatsim.net',url:'https://metar.vatsim.net/'+id,kind:'txt',third:true});
+  list.push({name:'corsproxy.io',url:'https://corsproxy.io/?url='+encodeURIComponent(awcUrl(id)),kind:'awc',third:true});
+  list.push({name:'api.allorigins.win',url:'https://api.allorigins.win/raw?url='+encodeURIComponent(awcUrl(id)),kind:'awc',third:true});
+  return list;
+}
+async function fetchText(url,ms){
+  const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(),ms);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal});
+    const txt = r.status===204 ? '' : await r.text();
+    return {ok:r.ok||r.status===204,status:r.status,txt};
+  } finally { clearTimeout(to); }
+}
 async function loadMetar(){
   const id=(S.w.icao||'').trim().toUpperCase();
   if(!/^[A-Z]{4}$/.test(id)){ S.w.state='err'; S.w.errMsg='Bitte einen vierstelligen ICAO-Code eingeben, z. B. EDDM.'; return update(); }
   S.w.state='loading'; update();
-  const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(),12000);
-  try{
-    const r=await fetch('https://aviationweather.gov/api/data/metar?ids='+id+'&format=json',{signal:ctrl.signal});
-    clearTimeout(to);
-    const txt = r.status===204 ? '' : await r.text();
-    if(r.status!==204 && !r.ok) throw new Error('HTTP '+r.status);
-    let arr=[]; if(txt.trim()){ try{ arr=JSON.parse(txt); }catch(_){ throw new Error('Antwort nicht lesbar'); } }
-    if(!Array.isArray(arr)||!arr.length){
-      S.w.state='none'; S.w.errMsg='Für '+id+' liegt kein aktuelles METAR vor. Viele kleine Plätze haben keins. Nimm das METAR eines nahen Platzes oder trage die Werte von Hand ein.';
-      return update();
-    }
-    const m=arr[0], raw=m.rawOb||'', pr=parseMetar(raw);
-    let q=Number.isFinite(m.altim)?m.altim:pr.qnh; if(Number.isFinite(q)&&q<100) q=q*33.8639;
-    let time = Number.isFinite(m.obsTime) ? m.obsTime*1000 : (m.reportTime ? Date.parse(String(m.reportTime).replace(' ','T').replace(/Z?$/,'Z')) : pr.time);
-    applyWx({
-      icao:m.icaoId||pr.icao||id, name:m.name||'', raw, time,
-      temp:Number.isFinite(m.temp)?m.temp:pr.temp,
-      wdir:(m.wdir!==undefined&&m.wdir!==null)?m.wdir:pr.wdir,
-      wspd:Number.isFinite(m.wspd)?m.wspd:pr.wspd,
-      wgst:Number.isFinite(m.wgst)?m.wgst:pr.wgst,
-      qnh:q, elev:Number.isFinite(m.elev)?m.elev:null
-    });
-  }catch(err){
-    clearTimeout(to);
-    S.w.state='err';
-    S.w.errMsg = err.name==='AbortError' ? 'Zeitüberschreitung beim Abruf. Prüfe deine Verbindung oder füge das METAR unten manuell ein.'
-      : 'Abruf nicht möglich. Entweder fehlt das Internet oder der Browser blockiert den Abruf aus dieser Seite. Du kannst das METAR unten manuell einfügen.';
-    update();
+  let empty=false;
+  for(const src of metarSources(id)){
+    try{
+      const r=await fetchText(src.url,9000);
+      if(!r.ok) continue;
+      const t=r.txt.trim();
+      if(src.kind==='txt'){
+        if(!t || t.length<12 || /<\s*html/i.test(t)) continue;
+        const pr=parseMetar(t.split('\n')[0]);
+        if(pr.icao!==id) continue;
+        return applyWx({icao:pr.icao,name:'',raw:pr.raw,time:pr.time,temp:pr.temp,wdir:pr.wdir,wspd:pr.wspd,wgst:pr.wgst,qnh:pr.qnh,elev:null,source:src.name,third:src.third});
+      }
+      if(!t){ empty=true; continue; }
+      let arr; try{ arr=JSON.parse(t); }catch(_){ continue; }
+      if(!Array.isArray(arr)||!arr.length){ empty=true; continue; }
+      const m=arr[0], raw=m.rawOb||'', pr=parseMetar(raw);
+      let q=Number.isFinite(m.altim)?m.altim:pr.qnh; if(Number.isFinite(q)&&q<100) q=q*33.8639;
+      const time = Number.isFinite(m.obsTime) ? m.obsTime*1000 : (m.reportTime ? Date.parse(String(m.reportTime).replace(' ','T').replace(/Z?$/,'Z')) : pr.time);
+      return applyWx({
+        icao:m.icaoId||pr.icao||id, name:m.name||'', raw, time,
+        temp:Number.isFinite(m.temp)?m.temp:pr.temp,
+        wdir:(m.wdir!==undefined&&m.wdir!==null)?m.wdir:pr.wdir,
+        wspd:Number.isFinite(m.wspd)?m.wspd:pr.wspd,
+        wgst:Number.isFinite(m.wgst)?m.wgst:pr.wgst,
+        qnh:q, elev:Number.isFinite(m.elev)?m.elev:null, source:src.name, third:src.third
+      });
+    }catch(_){ /* nächste Quelle */ }
   }
+  if(empty){
+    S.w.state='none'; S.w.errMsg='Für '+id+' liegt kein aktuelles METAR vor. Viele kleine Plätze haben keins. Nimm das METAR eines nahen Platzes oder trage die Werte von Hand ein.';
+  }else{
+    S.w.state='err'; S.w.errMsg='Kein Abrufweg war erreichbar. Prüfe die Internetverbindung oder füge das METAR unten manuell ein. Läuft die App nur in einer Vorschau (zum Beispiel in der Claude-App), sind Verbindungen nach außen gesperrt. Öffne sie dann über die Internetadresse in Safari oder über das Symbol auf dem Home-Bildschirm.';
+  }
+  update();
 }
 function applyRawMetar(){
   const raw=$('#metarRaw').value;
@@ -819,6 +904,7 @@ function renderWx(){
     <table><tr><td>QNH</td><td>${Number.isFinite(d.qnh)?Math.round(d.qnh)+' hPa':'–'}</td></tr>
     <tr><td>Temperatur</td><td>${Number.isFinite(d.temp)?fmt(d.temp)+' °C':'–'}</td></tr>
     <tr><td>Wind</td><td>${wind}</td></tr></table>${extra}
+    <p class="sub" style="margin:6px 0 0">${d.source?'Quelle: '+esc(d.source)+(d.third?' (Drittdienst, nur der ICAO-Code wurde übermittelt).':'.'):''}</p>
     <p class="sub" style="margin:6px 0 0">Übernommen in die Felder unten. Pistenrichtung, Länge und Neigung trägst du selbst ein.</p></div>${warn}`;
 }
 
@@ -968,9 +1054,72 @@ function play(){
   SC.raf=requestAnimationFrame(step);
 }
 
+
+/* ---------- Info & Recht ---------- */
+const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.4',date:'Oktober 2026'};
+function legalHTML(){
+  const ph=t=>/^\[/.test(t)?'<span class="ph">'+esc(t)+'</span>':esc(t);
+  return `
+  <p class="note">Stand: ${esc(LEGAL.date)}, App-Version ${esc(LEGAL.version)}</p>
+
+  <h3 id="lg-hinweis">Wichtiger Hinweis</h3>
+  <p>Diese App ist eine private, <b>inoffizielle</b> Planungshilfe für Privatpiloten. Sie ist keine amtliche, behördlich geprüfte oder zugelassene Luftfahrtunterlage. Sie ersetzt nicht das Flughandbuch (AFM/POH) und das aktuelle Wiege- und Beladeprotokoll des Luftfahrzeugs, nicht die AIP, NOTAM oder eine amtliche Flugwetterberatung und nicht die eigene Flugvorbereitung nach den geltenden Vorschriften.</p>
+
+  <h3 id="lg-haftung">Haftungsausschluss</h3>
+  <ul>
+    <li>Die Berechnungen (Start- und Landestrecke, Masse und Schwerpunkt, Kraftstoff) sind vereinfachte Näherungen. Für Flugzeuge ohne hinterlegte Handbuchtabellen werden Faustkorrekturen verwendet. Fehler, Rundungsabweichungen und Programmfehler sind nicht ausgeschlossen.</li>
+    <li>Für Richtigkeit, Vollständigkeit und Aktualität der Berechnungen, der Beispielwerte und der Wetterdaten wird keine Gewähr übernommen.</li>
+    <li>Flugzeugdaten werden von den Nutzenden selbst eingetragen oder sind Beispielwerte. Die Prüfung gegen die offiziellen Unterlagen liegt bei den Nutzenden.</li>
+    <li>Wetterdaten stammen von Dritten (z. B. NOAA Aviation Weather Center) und können fehlerhaft, veraltet oder nicht verfügbar sein. Sie ersetzen keine amtliche Wetterberatung.</li>
+    <li>Die Verantwortung für Planung, Durchführung und Sicherheit eines Fluges liegt allein bei der verantwortlichen Luftfahrzeugführerin bzw. beim verantwortlichen Luftfahrzeugführer.</li>
+    <li>Die Haftung für Vorsatz und grobe Fahrlässigkeit sowie für Schäden aus der Verletzung von Leben, Körper oder Gesundheit richtet sich nach den gesetzlichen Vorschriften. Im Übrigen ist die Haftung für die unentgeltliche Bereitstellung der App ausgeschlossen, soweit gesetzlich zulässig. Das gilt auch für den Verlust lokal gespeicherter Daten.</li>
+  </ul>
+
+  <h3 id="lg-nutzung">Nutzungsbedingungen</h3>
+  <p><b>§ 1 Geltungsbereich.</b> Diese Bedingungen gelten für die Nutzung der App „Flugvorbereitung“. Die App wird unentgeltlich und zur privaten, nicht gewerblichen Nutzung bereitgestellt.</p>
+  <p><b>§ 2 Leistung.</b> Die App ist eine Planungshilfe. Es besteht kein Anspruch auf ständige Verfügbarkeit, Fehlerfreiheit oder bestimmte Funktionen. Die App kann jederzeit geändert oder eingestellt werden.</p>
+  <p><b>§ 3 Pflichten der Nutzenden.</b> Nutzende prüfen alle Ergebnisse und Eingaben eigenverantwortlich anhand der offiziellen Unterlagen, tragen Daten korrekt ein und verwenden die App nicht als alleinige Entscheidungsgrundlage. Bei Zweifeln wird die App nicht verwendet.</p>
+  <p><b>§ 4 Eingegebene Inhalte.</b> Nutzende sind dafür verantwortlich, dass sie die eingegebenen Daten, etwa Auszüge aus Handbüchern, verwenden dürfen. Geschützte Inhalte Dritter dürfen nicht über die App weitergegeben werden.</p>
+  <p><b>§ 5 Zugang und Weitergabe.</b> Der Zugang ist personenbezogen. Links und Zugangsdaten dürfen nicht an Dritte weitergegeben werden. Bei Missbrauch kann der Zugang gesperrt werden.</p>
+  <p><b>§ 6 Haftung.</b> Es gilt der oben stehende Haftungsausschluss.</p>
+  <p><b>§ 7 Schlussbestimmungen.</b> Es gilt deutsches Recht, soweit dem keine zwingenden Verbraucherschutzvorschriften des Aufenthaltsstaats entgegenstehen. Sollte eine Bestimmung unwirksam sein, bleibt die Wirksamkeit der übrigen unberührt.</p>
+
+  <h3 id="lg-datenschutz">Datenschutz</h3>
+  <ul>
+    <li><b>Verantwortlich:</b> siehe Anbieterangaben unten.</li>
+    <li><b>Lokale Daten:</b> Hangar, Beladung und Einstellungen werden ausschließlich im Speicher deines Browsers bzw. Geräts abgelegt und nicht an den Anbieter übertragen. Du kannst sie im Hangar-Reiter oder über die Browserdaten löschen.</li>
+    <li><b>Bereitstellung der Seite:</b> Beim Aufruf verarbeitet der Hostinganbieter technisch notwendige Verbindungsdaten (z. B. IP-Adresse, Zeitpunkt, abgerufene Datei). Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (sichere und stabile Bereitstellung). Je nach Anbieter kann eine Verarbeitung in den USA stattfinden.</li>
+    <li><b>Zugangsschutz:</b> Falls der Zugang per E-Mail-Adresse geschützt ist, wird deine E-Mail-Adresse zur Zugangsprüfung verarbeitet.</li>
+    <li><b>METAR-Abruf:</b> Nur wenn du „METAR laden“ tippst, wird der eingegebene ICAO-Code, technisch bedingt auch deine IP-Adresse, an aviationweather.gov (NOAA, USA) übermittelt. Schlägt das fehl, kann die Anfrage über Ersatzdienste laufen (metar.vatsim.net, corsproxy.io, api.allorigins.win) oder über einen von dir eingetragenen Proxy. Rechtsgrundlage ist die von dir ausgelöste Funktion (Art. 6 Abs. 1 lit. b bzw. f DSGVO).</li>
+    <li><b>Keine Cookies, kein Tracking, keine Werbung.</b> Der lokale Speicher wird nur für die Funktion der App genutzt.</li>
+    <li><b>Deine Rechte:</b> Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Widerspruch und Beschwerde bei einer Datenschutzaufsichtsbehörde.</li>
+  </ul>
+
+  <h3 id="lg-impressum">Impressum / Anbieter</h3>
+  <p>${ph(LEGAL.name)}<br>${ph(LEGAL.addr)}<br>E-Mail: ${ph(LEGAL.mail)}</p>
+  <p>Private, nicht gewerbliche Bereitstellung. Der Anbieter ist kein Luftfahrtunternehmen und keine Behörde. Die App ist keine zugelassene Luftfahrtunterlage.</p>
+
+  <h3 id="lg-quellen">Quellen</h3>
+  <p>Wetterdaten: NOAA Aviation Weather Center (aviationweather.gov). Flugzeugdaten: Beispielwerte oder Eingaben der Nutzenden. Berechnungen: eigene Umsetzung.</p>`;
+}
+function legalTabHTML(){
+  const parts=legalHTML().split(/(?=<h3 id=)/), head=parts.shift(), by={};
+  parts.forEach(h=>{ const m=h.match(/<h3 id="([^"]+)"/); if(m) by[m[1]]=h; });
+  const order=['lg-impressum','lg-haftung','lg-nutzung','lg-datenschutz','lg-hinweis','lg-quellen'];
+  return head+order.map(k=>by[k]||'').join('');
+}
+function gotoInfo(id){
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.tab==='info'));
+  document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('on',x.id==='tab-info'));
+  const t=id&&document.getElementById(id);
+  if(t&&t.scrollIntoView) t.scrollIntoView(); else window.scrollTo(0,0);
+}
+function showLegal(id){ $('#legalBody').innerHTML=legalHTML(); const el=$('#legal'); el.classList.add('on'); el.scrollTop=0; if(id){ const t=document.getElementById(id); if(t&&t.scrollIntoView) t.scrollIntoView(); } }
+const ACK_KEY='fv_ack_v1';
+function ackNeeded(){ try{ return !localStorage.getItem(ACK_KEY); }catch(_){ return true; } }
 const STORE_KEY='fv_state_v1';
 function saveState(){
-  try{ localStorage.setItem(STORE_KEY,JSON.stringify({hangar:S.hangar,cur:S.cur,f:S.f,p:S.p,u:S.u,icao:S.w.icao})); }catch(_){}
+  try{ localStorage.setItem(STORE_KEY,JSON.stringify({hangar:S.hangar,cur:S.cur,f:S.f,p:S.p,u:S.u,icao:S.w.icao,set:S.set})); }catch(_){}
 }
 function loadState(){
   try{
@@ -979,7 +1128,7 @@ function loadState(){
     S.hangar=o.hangar.map(x=>Object.assign(JSON.parse(JSON.stringify(EXAMPLE)),x));
     S.cur=Math.min(Math.max(o.cur|0,0),S.hangar.length-1); S.ac=S.hangar[S.cur];
     Object.assign(S.f,o.f||{}); Object.assign(S.p,o.p||{}); Object.assign(S.u,o.u||{});
-    S.w.icao=o.icao||'';
+    S.w.icao=o.icao||''; Object.assign(S.set,o.set||{});
   }catch(_){}
 }
 function useAircraft(i){
@@ -990,6 +1139,7 @@ function useAircraft(i){
 loadState();
 build();
 update();
+if(ackNeeded()) $('#ack').classList.add('on');
 if(typeof navigator!=='undefined' && 'serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
