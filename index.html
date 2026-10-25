@@ -906,6 +906,7 @@ async function loadRunways(force){
     const {text,date}=await getRunwayCsv(force);
     const res=parseRunways(text,id);
     R.icao=id; R.date=date; R.maxElev=res.maxElev; R.list=res.list; R.chosen=-1; R.dirty=true;
+    if(res.maxElev!==null) S.p.elev=Math.round(res.maxElev);
     if(!res.list.length){ R.state='err'; R.msg='Für '+id+' sind keine Pisten in der Datenbank. Bitte Piste und Neigung selbst eintragen.'; }
     else R.state='ok';
   }catch(e){
@@ -917,6 +918,7 @@ async function loadRunways(force){
 function chooseRunway(i){
   const R=S.rwy, e=R.list[i]; if(!e) return;
   R.chosen=i;
+  if(R.maxElev!==null) S.p.elev=Math.round(R.maxElev);
   if(e.hdg!==null) S.p.rwy=e.hdg;
   S.p.slope = (e.slope!==null && Math.abs(e.slope)<=3) ? Math.round(e.slope*100)/100 : 0;
   if(e.lenM){ S.p.tora=Math.round(e.lenM); S.p.lda=Math.max(Math.round(e.lenM-(e.dispM||0)),0); }
@@ -951,7 +953,8 @@ function renderRwy(){
       '<p class="sub" style="margin:6px 0 0">Pistenrichtung '+(e.hdg!==null?fmt(e.hdg)+'° (aus der Pistennummer)':'bitte selbst eintragen')+' übernommen. TORA ist die ganze Länge, LDA die Länge minus versetzte Schwelle. Erklärte Strecken, Stopways und Hindernisse kennt die Datenbank nicht. Vergleiche mit der AIP und ändere die Felder bei Bedarf.</p>';
   }
   let elev='';
-  if(R.maxElev!==null) elev='<div class="row"><button class="btn sec small" id="applyElev">Platzhöhe '+fmt(R.maxElev)+' ft übernehmen</button></div><p class="sub" style="margin:0">Höchste Schwellenhöhe der Datenbank. Mit der AIP vergleichen.</p>';
+  if(R.maxElev!==null) elev='<p class="sub" style="margin:8px 0 0">Platzhöhe '+fmt(Math.round(R.maxElev))+' ft übernommen (höchste Schwellenhöhe der Datenbank). Mit der AIP vergleichen, sie bestimmt die Strecken stark.</p>';
+  else elev='<div class="alert">Die Datenbank hat keine Höhen für diesen Platz. Die Platzhöhe bleibt unverändert ('+fmt(S.p.elev)+' ft), bitte selbst prüfen.</div>';
   return '<div class="card ok"><h3>Pisten von '+esc(R.icao)+'</h3>'+(body||'<p class="sub" style="margin:0">'+R.list.length+' Pistenenden gefunden. Wähle oben eine Piste.</p>')+elev+
     '<p class="sub" style="margin:8px 0 0">Quelle: OurAirports (offene Daten, ohne Gewähr)'+(R.date?', Stand '+esc(R.date):'')+'. <a href="#" id="refreshRwy">Neu laden</a></p></div>';
 }
@@ -1202,7 +1205,7 @@ function play(){
 
 
 /* ---------- Info & Recht ---------- */
-const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.9',date:'Oktober 2026'};
+const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.9.1',date:'Oktober 2026'};
 function legalHTML(){
   const ph=t=>/^\[/.test(t)?'<span class="ph">'+esc(t)+'</span>':esc(t);
   return `
