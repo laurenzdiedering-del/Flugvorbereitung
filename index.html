@@ -124,6 +124,18 @@ details.det textarea{margin-top:8px}
 .badge{font-size:12px;font-weight:600;color:var(--acc-ink);background:var(--acc);border-radius:999px;padding:1px 9px}
 .btn.del{color:var(--bad);border-color:var(--bad)}
 .btn.small{padding:7px 12px;font-size:14px}
+#splash{position:fixed;inset:0;z-index:100;background:linear-gradient(#14263a,#1b4166);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;animation:splashOut .55s ease 1.5s forwards}
+#splash img{width:104px;height:104px;border-radius:24px;box-shadow:0 10px 30px rgba(0,0,0,.35);animation:spRise .8s cubic-bezier(.2,.8,.2,1) both}
+#splash .sp-t{font-size:22px;font-weight:650;letter-spacing:.2px;margin-top:10px;animation:spFade .7s ease .3s both}
+#splash .sp-s{font-size:13px;opacity:.7;animation:spFade .7s ease .5s both}
+#splash .sp-v{font-size:12px;opacity:.5;margin-top:2px;animation:spFade .7s ease .6s both}
+#splash .sp-bar{width:96px;height:3px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden;margin-top:16px;animation:spFade .5s ease .5s both}
+#splash .sp-bar i{display:block;height:100%;width:100%;background:#fff;border-radius:2px;transform-origin:left;animation:spBar 1.3s ease-in-out .3s both}
+@keyframes spRise{from{opacity:0;transform:translateY(16px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes spFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes spBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes splashOut{from{opacity:1;visibility:visible}to{opacity:0;visibility:hidden}}
+@media (prefers-reduced-motion:reduce){#splash{animation:splashOut .2s ease .4s forwards}#splash *{animation:none!important}}
 @media (min-width:768px){
   main{max-width:920px}
   .grid{grid-template-columns:repeat(3,1fr)}
@@ -144,6 +156,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true">
+  <img src="icon-192.png" alt="">
+  <div class="sp-t">Flugvorbereitung</div>
+  <div class="sp-s">Inoffizielle Planungshilfe</div>
+  <div class="sp-v" id="spv"></div>
+  <div class="sp-bar"><i></i></div>
+</div>
 <header class="top">
   <div class="title"><b id="acTitle">Flugvorbereitung</b><div style="display:flex;align-items:center;gap:10px"><span>Inoffizielle Planungshilfe</span><button class="info" id="openLegal" aria-label="Info und Recht">i</button></div></div>
   <div class="chips" id="chips"></div>
@@ -852,15 +871,16 @@ function parseRunways(text,ident){
     const f=csvSplit(ln); if(f[ix.airport_ident]!==ident||f[ix.closed]==='1') continue;
     const len=num(f[ix.length_ft]), le=f[ix.le_ident], he=f[ix.he_ident];
     const eLe=num(f[ix.le_elevation_ft]), eHe=num(f[ix.he_elevation_ft]);
+    const dLe=ix.le_displaced_threshold_ft===undefined?NaN:num(f[ix.le_displaced_threshold_ft]), dHe=ix.he_displaced_threshold_ft===undefined?NaN:num(f[ix.he_displaced_threshold_ft]);
     [eLe,eHe].forEach(e=>{ if(Number.isFinite(e)) maxElev=maxElev===null?e:Math.max(maxElev,e); });
-    const mk=(id,opp,e,eo)=>{
+    const mk=(id,opp,e,eo,dsp)=>{
       if(!id) return;
       const m=id.match(/^(\d{1,2})/);
       let slope=(Number.isFinite(e)&&Number.isFinite(eo)&&len>0)?(eo-e)/len*100:null;
       list.push({ident:id,opp,runway:(le&&he)?le+'/'+he:id,lenM:Number.isFinite(len)?len*0.3048:null,
-        hdg:m?parseInt(m[1],10)*10:null,elev:e,oppElev:eo,slope,surface:f[ix.surface]||''});
+        hdg:m?parseInt(m[1],10)*10:null,elev:e,oppElev:eo,slope,surface:f[ix.surface]||'',dispM:Number.isFinite(dsp)?dsp*0.3048:0});
     };
-    mk(le,he,eLe,eHe); mk(he,le,eHe,eLe);
+    mk(le,he,eLe,eHe,dLe); mk(he,le,eHe,eLe,dHe);
   }
   list.sort((a,b)=>a.ident.localeCompare(b.ident,undefined,{numeric:true}));
   return {list,maxElev};
@@ -899,6 +919,7 @@ function chooseRunway(i){
   R.chosen=i;
   if(e.hdg!==null) S.p.rwy=e.hdg;
   S.p.slope = (e.slope!==null && Math.abs(e.slope)<=3) ? Math.round(e.slope*100)/100 : 0;
+  if(e.lenM){ S.p.tora=Math.round(e.lenM); S.p.lda=Math.max(Math.round(e.lenM-(e.dispM||0)),0); }
   update();
 }
 function syncRwySelect(){
@@ -924,10 +945,10 @@ function renderRwy(){
     else if(Math.abs(e.slope)>3) sl='<div class="alert bad">Die Datenbank ergibt '+fmt(e.slope,2)+' %. Das ist unplausibel und wurde nicht übernommen. Die Neigung steht auf 0 %, bitte selbst eintragen.</div>';
     else sl='<p class="sub" style="margin:6px 0 0">Neigung '+(e.slope>=0?'+':'')+fmt(e.slope,2)+' % ('+(e.slope>=0?'bergauf':'bergab')+' in Richtung '+esc(e.ident)+') übernommen.</p>';
     body='<table><tr><td>Piste</td><td>'+esc(e.ident)+' ('+esc(e.runway)+')</td></tr>'+
-      '<tr><td>Länge laut Datenbank</td><td>'+(e.lenM?fmt(e.lenM)+' m':'–')+'</td></tr>'+
+      '<tr><td>Länge laut Datenbank</td><td>'+(e.lenM?fmt(e.lenM)+' m':'–')+'</td></tr>'+(e.lenM?'<tr><td>Übernommen: TORA / LDA</td><td>'+fmt(S.p.tora)+' / '+fmt(S.p.lda)+' m</td></tr>':'')+
       '<tr><td>Belag laut Datenbank</td><td>'+esc(e.surface||'–')+'</td></tr>'+
       '<tr><td>Höhe Schwelle '+esc(e.ident)+' / '+esc(e.opp)+'</td><td>'+f(e.elev)+' / '+f(e.oppElev)+'</td></tr></table>'+sl+
-      '<p class="sub" style="margin:6px 0 0">Pistenrichtung '+(e.hdg!==null?fmt(e.hdg)+'° (aus der Pistennummer)':'bitte selbst eintragen')+' übernommen. Verfügbare Strecken (TORA/LDA) trägst du selbst ein, die Datenbanklänge enthält keine Abzüge.</p>';
+      '<p class="sub" style="margin:6px 0 0">Pistenrichtung '+(e.hdg!==null?fmt(e.hdg)+'° (aus der Pistennummer)':'bitte selbst eintragen')+' übernommen. TORA ist die ganze Länge, LDA die Länge minus versetzte Schwelle. Erklärte Strecken, Stopways und Hindernisse kennt die Datenbank nicht. Vergleiche mit der AIP und ändere die Felder bei Bedarf.</p>';
   }
   let elev='';
   if(R.maxElev!==null) elev='<div class="row"><button class="btn sec small" id="applyElev">Platzhöhe '+fmt(R.maxElev)+' ft übernehmen</button></div><p class="sub" style="margin:0">Höchste Schwellenhöhe der Datenbank. Mit der AIP vergleichen.</p>';
@@ -1181,7 +1202,7 @@ function play(){
 
 
 /* ---------- Info & Recht ---------- */
-const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.7',date:'Oktober 2026'};
+const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.9',date:'Oktober 2026'};
 function legalHTML(){
   const ph=t=>/^\[/.test(t)?'<span class="ph">'+esc(t)+'</span>':esc(t);
   return `
@@ -1265,6 +1286,7 @@ function useAircraft(i){
 loadState();
 build();
 update();
+{ const sv=$('#spv'); if(sv) sv.textContent='Version '+LEGAL.version; }
 if(ackNeeded()) $('#ack').classList.add('on');
 if(typeof navigator!=='undefined' && 'serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
