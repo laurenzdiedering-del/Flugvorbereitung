@@ -258,6 +258,7 @@ S.p.tora = 800; S.p.lda = 800;
 S.p.wcorr = 0;
 S.w = {icao:'', state:'idle', data:null, errMsg:''};
 S.set = {proxy:''};
+S.apt = '';
 S.hangar = [S.ac];
 S.cur = 0;
 S.pendingDel = -1;
@@ -278,7 +279,7 @@ const SURF = [
 const get = p => p.split('.').reduce((o,k)=>o?.[k],S);
 const set = (p,v) => { const k=p.split('.'),l=k.pop(); k.reduce((o,x)=>o[x],S)[l]=v; };
 const $ = s => document.querySelector(s);
-const fmt = (v,d=0) => isFinite(v) ? v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}) : '–';
+const fmt = (v,d=0) => (v!==null&&v!==undefined&&v!==''&&isFinite(v)) ? Number(v).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}) : '–';
 const hm = min => { if(!isFinite(min)) return '–'; const t=Math.round(min); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+' h'; };
 const rad = d => d*Math.PI/180;
 const esc = t => String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -327,7 +328,7 @@ function build(){
       ${field('Verfügbar Landung (LDA)','p.lda',{unit:'m'})}
       ${field('Sicherheitsfaktor Start','p.sfTO',{step:'0.05'})}
       ${field('Sicherheitsfaktor Landung','p.sfLD',{step:'0.05'})}
-      <div id="wcorrBox" class="full" style="display:none">${sel('Masse bei den Strecken','p.wcorr',[[0,'Aus: Tabellenwert für max. Masse (POH)'],[1,'Näherung: tatsächliche Masse anrechnen']])}</div>
+      <div id="wcorrBox" class="full" style="display:none">${sel('Masse bei den Strecken','p.wcorr',[[0,'Aus: Tabellenwert für max. Masse (POH)'],[1,'Näherung: tatsächliche Masse anrechnen']])}<p class="sub" id="wcorrInfo" style="margin:4px 0 0"></p></div>
     </div>
     <p class="note">Start- und Landemasse kommen automatisch aus dem Reiter W&amp;B.</p>
     <div id="perfResA"></div>
@@ -423,6 +424,18 @@ function build(){
     <p class="note">Das ausgewählte Flugzeug wird in allen Reitern verwendet. Seine Daten bearbeitest du im Reiter Daten.</p>
     <div id="hangarList"></div>
     <div class="row"><button class="btn" data-act="add">Neues Flugzeug</button></div>
+    <h2>Neues Flugzeug aus dem POH</h2>
+    <p class="note">Die App liest PDFs nicht selbst, das übernimmt Claude für dich:</p>
+    <ol class="note" style="padding-left:20px;margin:6px 0">
+      <li>Tippe auf „Anfrage-Text kopieren“.</li>
+      <li>Öffne einen Chat mit Claude, hänge das POH (und den Wägebericht) als PDF an und füge den Text ein.</li>
+      <li>Kopiere Claudes Antwort (der Text in den geschweiften Klammern).</li>
+      <li>Füge sie unten im Feld „Hangar-Text“ ein und tippe auf „Importieren“. Das Flugzeug wird neu angelegt, dein Hangar bleibt erhalten.</li>
+      <li>Prüfe alle Werte im Reiter Daten gegen das Handbuch.</li>
+    </ol>
+    <div class="row"><button class="btn sec small" id="copyPrompt">Anfrage-Text kopieren</button></div>
+    <textarea id="promptBox" readonly style="min-height:60px" placeholder="Hier erscheint der Anfrage-Text"></textarea>
+    <div class="note" id="impMsg2"></div>
     <h2>Hangar sichern</h2>
     <p class="note">Die App speichert nichts selbst. Exportiere den ganzen Hangar als Text, bewahre ihn z. B. in einer Notiz auf und füge ihn später wieder ein.</p>
     <textarea id="json" spellcheck="false" placeholder="Hangar-Text"></textarea>
@@ -517,7 +530,7 @@ function interp2(alts,temps,tbl,pa,t){
   return (v00*(1-ft)+v01*ft)*(1-fa)+(v10*(1-ft)+v11*ft)*fa;
 }
 function calcPerf(wb){
-  const a=S.ac,p=S.p;
+  const a=S.ac,p=cleanP(S.p);
   const pa = p.elev + (1013.25-p.qnh)*27;
   const isa = 15 - 2*pa/1000;
   const da = pa + 120*(p.oat-isa);
@@ -547,11 +560,29 @@ function calcPerf(wb){
     const paC=clampv(pa,T.alts[0],amax), tC=clampv(p.oat,T.temps[0],tmax);
     const beyond = pa>amax || p.oat>tmax;
     const useW = p.wcorr===1;
-    const fWt = useW ? Math.pow(Math.min(wb.tow.m,a.mtow)/a.mtow,2) : 1;
-    const fWl = useW ? Math.min(wb.lw.m,a.mlw)/a.mlw : 1;
-    const mkT=(rollT,obsT,grass,col,slopeF,sf,avail,fW)=>{
-      let roll=interp2(T.alts,T.temps,rollT,paC,tC)*fWind*slopeF*fW;
-      let obs=interp2(T.alts,T.temps,obsT,paC,tC)*fWind*slopeF*fW;
+    const toW = Array.isArray(T.toWeights)&&T.toWeights.length ? T.toWeights.map(Number) : [Number(T.weight)||a.mtow];
+    const ldW = Array.isArray(T.ldWeights)&&T.ldWeights.length ? T.ldWeights.map(Number) : [Number(T.ldWeight)||a.mlw];
+    const is3 = g => Array.isArray(g)&&Array.isArray(g[0])&&Array.isArray(g[0][0]);
+    const pick = (g,wts,mass)=>{
+      if(!is3(g)||wts.length<2){ const t=is3(g)?g[0]:g; return {v:interp2(T.alts,T.temps,t,paC,tC),lo:wts[0],hi:wts[0],interp:false}; }
+      let k=0; while(k<wts.length-2 && mass>wts[k+1]) k++;
+      const lo=wts[k], hi=wts[k+1], vLo=interp2(T.alts,T.temps,g[k],paC,tC), vHi=interp2(T.alts,T.temps,g[k+1],paC,tC);
+      if(mass<=lo) return {v:vLo,lo,hi:lo,interp:false};
+      if(mass>=hi) return {v:vHi,lo:hi,hi,interp:false};
+      return {v:vLo+(vHi-vLo)*(mass-lo)/(hi-lo),lo,hi,interp:true};
+    };
+    const rT=pick(T.toRoll,toW,wb.tow.m), oT=pick(T.toObs,toW,wb.tow.m);
+    const rL=pick(T.ldRoll,ldW,wb.lw.m), oL=pick(T.ldObs,ldW,wb.lw.m);
+    const belowTO = !rT.interp && wb.tow.m < rT.lo-1e-6, aboveTO = !rT.interp && wb.tow.m > rT.hi+1e-6;
+    const belowLD = !rL.interp && wb.lw.m < rL.lo-1e-6, aboveLD = !rL.interp && wb.lw.m > rL.hi+1e-6;
+    const fWt = (belowTO&&useW) ? Math.pow(wb.tow.m/rT.lo,2) : 1;
+    const fWl = (belowLD&&useW) ? wb.lw.m/rL.lo : 1;
+    const txt=(r,below,above)=> r.interp ? 'zwischen '+fmt(r.lo)+' und '+fmt(r.hi)+' kg interpoliert'
+      : above ? 'Tabelle '+fmt(r.hi)+' kg, Masse liegt darüber!'
+      : below ? 'Tabelle '+fmt(r.lo)+' kg'+(useW?', leichter per Näherung':', kein Abzug für leichtere Masse')
+      : 'Tabelle '+fmt(r.lo)+' kg';
+    const fin=(roll,obs,grass,col,slopeF,sf,avail)=>{
+      roll*=fWind*slopeF; obs*=fWind*slopeF;
       if(p.surf>=2){
         const add=roll*grass; roll+=add; obs+=add;
         const extra = p.surf>=3 ? SURF[p.surf][col]/SURF[2][col] : 1;
@@ -561,9 +592,10 @@ function calcPerf(wb){
       if(req>avail) st = obs<=avail ? 'warn' : 'bad';
       return {roll,obs,req,avail,st,margin:avail-req};
     };
-    return {pa,da,hw,xw,table:true,beyond,useW,
-      to:mkT(T.toRoll,T.toObs,T.grassTO,1,fSlTO,p.sfTO,p.tora,fWt),
-      ld:mkT(T.ldRoll,T.ldObs,T.grassLD,2,fSlLD,p.sfLD,p.lda,fWl)};
+    return {pa,da,hw,xw,table:true,beyond,useW,fWt,fWl,belowTO,belowLD,aboveTO,aboveLD,loTO:rT.lo,loLD:rL.lo,
+      wTxtTO:txt(rT,belowTO,aboveTO), wTxtLD:txt(rL,belowLD,aboveLD),
+      to:fin(rT.v*fWt,oT.v*fWt,T.grassTO,1,fSlTO,p.sfTO,p.tora),
+      ld:fin(rL.v*fWl,oL.v*fWl,T.grassLD,2,fSlLD,p.sfLD,p.lda)};
   }
   return {pa,da,hw,xw,
     to:mk(a.toRoll,a.toObs,kTO,p.sfTO,p.tora),
@@ -634,8 +666,10 @@ function update(){
   if(wb.towOver) warn+=`<div class="alert bad">Startmasse über MTOW (${fmt(wb.tow.m)} kg). Berechnung gilt nur für Maximalmasse bis MTOW.</div>`;
   if(pf.hw<0 && -pf.hw>10) warn+=`<div class="alert">Rückenwind über 10 kt. Handbuchwerte reichen meist nicht aus, Piste wechseln.</div>`;
   if(Math.abs(pf.xw)>a.maxXw) warn+=`<div class="alert bad">Seitenwind über Maximum von ${fmt(a.maxXw)} kt.</div>`;
+  const miss=[['elev','Platzhöhe'],['qnh','QNH'],['oat','Außentemperatur'],['rwy','Pistenrichtung'],['tora','Verfügbar Start (TORA)'],['lda','Verfügbar Landung (LDA)']].filter(k=>S.p[k[0]]===null||S.p[k[0]]===undefined||S.p[k[0]]==='').map(k=>k[1]);
+  if(miss.length) warn+=`<div class="alert bad">Platzdaten fehlen: ${miss.join(', ')}. Bitte eintragen oder METAR und Pisten laden. Bis dahin sind die Strecken nicht aussagekräftig.</div>`;
   if(pf.beyond) warn+=`<div class="alert bad">Druckhöhe oder Temperatur über dem Tabellenbereich des POH. Gerechnet ist die Obergrenze, die wirkliche Strecke ist länger.</div>`;
-  if(pf.table) warn+=`<div class="alert">Werte aus den POH-Tabellen: Kurzstart mit Klappen 10° und Vollgas vor Bremsenlösen, Kurzlandung mit Klappen 30° und bestmöglichem Bremsen. ${pf.useW?'Leichtere Masse ist als Näherung angerechnet (Start nach Masse zum Quadrat, Landung linear). Das steht nicht im POH, nutze es mit Vorsicht.':'Das POH hat keine Tabelle für andere Massen, deshalb gilt der Wert für die Maximalmasse. Du kannst oben eine Näherung für leichtere Masse einschalten.'}</div>`;
+  if(pf.table) warn+=`<div class="alert">Werte aus den hinterlegten Tabellen: ${esc(a.tab.src||'Handbuch')}. ${(pf.belowTO||pf.belowLD)?(pf.useW?'Unterhalb der kleinsten Tabellenmasse ist leichtere Masse als Näherung angerechnet (Start nach Masse zum Quadrat, Landung linear). Das steht nicht im Handbuch, nutze es mit Vorsicht.':'Unterhalb der kleinsten Tabellenmasse gibt es keine Werte, deshalb gilt der Tabellenwert. Du kannst unten eine Näherung für leichtere Masse einschalten.'):''}${(pf.aboveTO||pf.aboveLD)?' Die Masse liegt über den Tabellen, die Werte sind nicht verlässlich.':''}</div>`;
   const side = pf.xw>=0 ? 'von rechts' : 'von links';
   LAST.pf=pf; LAST.wb=wb;
   $('#perfResA').innerHTML = `
@@ -645,7 +679,7 @@ function update(){
       <tr><td>Dichtehöhe</td><td>${fmt(pf.da)} ft</td></tr>
       <tr><td>${pf.hw>=0?'Gegenwind':'Rückenwind'}</td><td>${fmt(Math.abs(pf.hw),1)} kt</td></tr>
       <tr><td>Seitenwind</td><td>${fmt(Math.abs(pf.xw),1)} kt ${side}</td></tr>
-      ${pf.table?'<tr><td>Grundlage</td><td>POH-Tabelle</td></tr><tr><td>Rechenmasse Strecken</td><td>'+(pf.useW?fmt(wb.tow.m)+' / '+fmt(wb.lw.m)+' kg (Näherung)':fmt(a.mtow)+' kg (Tabellenwert)')+'</td></tr>':''}
+      ${pf.table?'<tr><td>Grundlage</td><td>POH-Tabelle</td></tr><tr><td>Strecken Start</td><td>'+pf.wTxtTO+'</td></tr><tr><td>Strecken Landung</td><td>'+pf.wTxtLD+'</td></tr>':''}
       <tr><td>Startmasse / Landemasse</td><td>${fmt(wb.tow.m)} / ${fmt(wb.lw.m)} kg</td></tr>
     </table></div>`;
   $('#perfResB').innerHTML = `
@@ -720,7 +754,11 @@ function update(){
 
   const tn=$('#tabNote'); if(tn) tn.innerHTML = a.tab ? '<div class="alert">Dieses Flugzeug rechnet mit den hinterlegten Tabellen: '+esc(a.tab.src)+'. Die Referenzwerte unten werden dann nicht verwendet.</div>' : '';
   /* Wetter & Ansicht */
-  const wb2=$('#wcorrBox'); if(wb2) wb2.style.display = a.tab ? '' : 'none';
+  const wi=$('#wcorrInfo');
+  if(wi) wi.textContent = pf.table ? (pf.useW
+    ? 'Unterhalb der kleinsten Tabellenmasse wird mit deiner tatsächlichen Masse umgerechnet: Start × '+fmt(pf.fWt,2)+', Landung × '+fmt(pf.fWl,2)+' (Start nach Masse zum Quadrat, Landung linear). Das ist eine Faustregel und steht nicht im Handbuch.'
+    : 'Das Handbuch hat keine Tabelle für leichtere Masse als '+fmt(pf.belowTO?pf.loTO:pf.loLD)+' kg. Die App rechnet vorsichtig mit diesem Tabellenwert weiter.') : '';
+  const wb2=$('#wcorrBox'); if(wb2) wb2.style.display = (pf.table&&(pf.belowTO||pf.belowLD)) ? '' : 'none';
   $('#wxInfo').innerHTML = renderWx();
   $('#rwyInfo').innerHTML = renderRwy(); syncRwySelect();
   if(!SC.playing) SC.t = 1;
@@ -744,7 +782,7 @@ document.addEventListener('input',e=>{
     return;
   }
   if(!el.dataset.bind) return;
-  if(el.dataset.text){ if(el.dataset.bind==='w.icao') el.value=el.value.toUpperCase(); set(el.dataset.bind,el.value); }
+  if(el.dataset.text){ if(el.dataset.bind==='w.icao') el.value=el.value.toUpperCase(); set(el.dataset.bind,el.value); if(el.dataset.bind==='w.icao'){ const v=el.value.trim(); if(v.length>=4 && S.apt && v!==S.apt){ clearAirportData(); S.apt=''; } } }
   else { const v=parseFloat(String(el.value).replace(',','.')); set(el.dataset.bind,isFinite(v)?v:0); }
   update();
 });
@@ -797,23 +835,13 @@ document.addEventListener('click',e=>{
   }
   if(e.target.id==='fillMin'){ const fu=calcFuel(); S.f.loaded=Math.ceil(fu.target); update(); }
   if(e.target.id==='exp'){ $('#json').value=JSON.stringify({hangar:S.hangar,cur:S.cur}); $('#json').select(); $('#impMsg').textContent='Profil-Text erstellt. Kopiere ihn und bewahre ihn sicher auf.'; }
-  if(e.target.id==='imp'){
-    try{
-      const o=JSON.parse($('#json').value);
-      const list = Array.isArray(o.hangar) ? o.hangar : (Array.isArray(o.st)&&Array.isArray(o.env) ? [o] : null);
-      if(!list||!list.length) throw 0;
-      const base=JSON.parse(JSON.stringify(EXAMPLE));
-      const clean=list.map(x=>{
-        if(!x||!Array.isArray(x.st)||!Array.isArray(x.env)) throw 0;
-        const y=Object.assign(JSON.parse(JSON.stringify(base)),x);
-        while(y.st.length<4) y.st.push({n:'Station',arm:1,max:0});
-        y.st=y.st.slice(0,4);
-        return y;
-      });
-      S.hangar=clean; S.pendingDel=-1;
-      useAircraft(Math.min(Math.max(parseInt(o.cur)||0,0),clean.length-1));
-      $('#impMsg').textContent=clean.length+' Flugzeug(e) geladen.';
-    }catch(_){ $('#impMsg').textContent='Der Text ist kein gültiger Hangar.'; }
+  if(e.target.id==='imp'){ $('#impMsg').innerHTML=importText($('#json').value); }
+  if(e.target.id==='copyPrompt'){
+    const ta=$('#promptBox'); ta.value=POH_PROMPT;
+    const ok=()=>{ $('#impMsg2').textContent='Anfrage-Text kopiert. Öffne einen Chat mit Claude, hänge dein POH an und füge den Text ein.'; };
+    const manual=()=>{ ta.select(); $('#impMsg2').textContent='Bitte den Text im Feld markieren und kopieren.'; };
+    if(typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(POH_PROMPT).then(ok).catch(manual); else manual();
+    return;
   }
 });
 
@@ -901,6 +929,7 @@ async function getRunwayCsv(force){
 async function loadRunways(force){
   const id=(S.w.icao||'').trim().toUpperCase(), R=S.rwy;
   if(!/^[A-Z0-9]{3,4}$/.test(id)){ R.state='err'; R.msg='Bitte oben den ICAO-Code des Platzes eingeben.'; return update(); }
+  newAirport(id);
   R.state='loading'; R.msg=''; update();
   try{
     const {text,date}=await getRunwayCsv(force);
@@ -959,6 +988,16 @@ function renderRwy(){
     '<p class="sub" style="margin:8px 0 0">Quelle: OurAirports (offene Daten, ohne Gewähr)'+(R.date?', Stand '+esc(R.date):'')+'. <a href="#" id="refreshRwy">Neu laden</a></p></div>';
 }
 
+function clearAirportData(){
+  Object.assign(S.p,{elev:null,qnh:null,oat:null,wd:null,ws:null,rwy:null,slope:null,tora:null,lda:null});
+  S.w.state='idle'; S.w.data=null; S.w.errMsg='';
+  Object.assign(S.rwy,{state:'idle',msg:'',list:[],chosen:-1,icao:'',date:'',dirty:true,maxElev:null});
+}
+function newAirport(id){ if(S.apt!==id){ clearAirportData(); S.apt=id; } }
+function cleanP(P){
+  const n=(v,d)=>(v===null||v===undefined||v===''||!Number.isFinite(+v))?d:+v;
+  return Object.assign({},P,{elev:n(P.elev,0),qnh:n(P.qnh,1013.25),oat:n(P.oat,15),rwy:n(P.rwy,0),wd:n(P.wd,0),ws:n(P.ws,0),slope:n(P.slope,0),tora:n(P.tora,0),lda:n(P.lda,0)});
+}
 const awcUrl=id=>'https://aviationweather.gov/api/data/metar?ids='+id+'&format=json';
 function metarSources(id){
   const list=[], px=((S.set&&S.set.proxy)||'').trim();
@@ -983,6 +1022,7 @@ async function fetchText(url,ms){
 async function loadMetar(){
   const id=(S.w.icao||'').trim().toUpperCase();
   if(!/^[A-Z]{4}$/.test(id)){ S.w.state='err'; S.w.errMsg='Bitte einen vierstelligen ICAO-Code eingeben, z. B. EDDM.'; return update(); }
+  newAirport(id);
   S.w.state='loading'; update();
   let empty=false;
   for(const src of metarSources(id)){
@@ -1025,7 +1065,7 @@ function applyRawMetar(){
   if(!raw.trim() || (pr.qnh===undefined && pr.temp===undefined && pr.wspd===undefined)){
     S.w.state='err'; S.w.errMsg='Aus dem Text konnte ich keine Werte lesen. Füge die komplette METAR-Zeile ein.'; return update();
   }
-  if(pr.icao) S.w.icao=pr.icao;
+  if(pr.icao){ S.w.icao=pr.icao; newAirport(pr.icao); }
   applyWx(Object.assign({name:'',elev:null},pr));
 }
 function renderWx(){
@@ -1205,7 +1245,7 @@ function play(){
 
 
 /* ---------- Info & Recht ---------- */
-const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'1.9.1',date:'Oktober 2026'};
+const LEGAL={name:'Laurenz Diedering',addr:'73765 Neuhausen auf den Fildern',mail:'Laurenz.diedering@gmail.com',version:'2.1',date:'Oktober 2026'};
 function legalHTML(){
   const ph=t=>/^\[/.test(t)?'<span class="ph">'+esc(t)+'</span>':esc(t);
   return `
@@ -1269,7 +1309,7 @@ const ACK_KEY='fv_ack_v1';
 function ackNeeded(){ try{ return !localStorage.getItem(ACK_KEY); }catch(_){ return true; } }
 const STORE_KEY='fv_state_v1';
 function saveState(){
-  try{ localStorage.setItem(STORE_KEY,JSON.stringify({hangar:S.hangar,cur:S.cur,f:S.f,p:S.p,u:S.u,icao:S.w.icao,set:S.set})); }catch(_){}
+  try{ localStorage.setItem(STORE_KEY,JSON.stringify({hangar:S.hangar,cur:S.cur,f:S.f,p:S.p,u:S.u,icao:S.w.icao,set:S.set,apt:S.apt})); }catch(_){}
 }
 function loadState(){
   try{
@@ -1278,8 +1318,112 @@ function loadState(){
     S.hangar=o.hangar.map(x=>Object.assign(JSON.parse(JSON.stringify(EXAMPLE)),x));
     S.cur=Math.min(Math.max(o.cur|0,0),S.hangar.length-1); S.ac=S.hangar[S.cur];
     Object.assign(S.f,o.f||{}); Object.assign(S.p,o.p||{}); Object.assign(S.u,o.u||{});
-    S.w.icao=o.icao||''; Object.assign(S.set,o.set||{});
+    S.w.icao=o.icao||''; Object.assign(S.set,o.set||{}); S.apt=o.apt||'';
   }catch(_){}
+}
+
+const POH_PROMPT = `Ich lade dir das Flughandbuch (POH/AFM) meines Flugzeugs hoch, eventuell auch den aktuellen Wägebericht. Lies die Unterlagen und erstelle daraus ein Flugzeugprofil für meine Flugvorbereitungs-App.
+
+Antworte NUR mit einem JSON-Objekt in einem Code-Block, ohne weiteren Text davor oder danach. Alle Werte metrisch: kg, m, Liter, kt, ft (nur für Höhen in den Tabellen), °C. Rechne Pfund, Zoll und US-Gallonen um. Nimm Leermasse und Leermasse-Hebelarm aus dem aktuellen Wägebericht, wenn vorhanden. Erfinde keine Werte. Wenn etwas fehlt, unsicher oder aus dem Scan schwer lesbar ist, schreibe es als Satz in das Feld "hinweise".
+
+Format:
+{
+  "name": "Kennzeichen · Muster",
+  "empty": Leermasse kg,
+  "emptyArm": Leermasse-Hebelarm in m,
+  "mtow": maximale Startmasse kg,
+  "mlw": maximale Landemasse kg,
+  "maxXw": maximaler Seitenwind kt (nachgewiesen),
+  "tank": ausfliegbare Kraftstoffmenge in Litern,
+  "dens": 0.72,
+  "burn": Verbrauch in l/h im Reiseflug,
+  "tas": Reisegeschwindigkeit TAS in kt,
+  "fuelArm": Tank-Hebelarm in m,
+  "st": [
+    {"n": "Pilot", "arm": Hebelarm m, "max": 0},
+    {"n": "Fluggast", "arm": Hebelarm m, "max": 0},
+    {"n": "Gepäckraum 1", "arm": Hebelarm m, "max": maximale kg},
+    {"n": "Gepäckraum 2", "arm": Hebelarm m, "max": maximale kg}
+  ],
+  "bagMax": zulässige Summe aller Gepäckräume in kg oder 0,
+  "bagIdx": [2, 3],
+  "env": [[Hebelarm m, Masse kg], ...],
+  "toRoll": Startrollstrecke m bei Maximalmasse, Meereshöhe, ISA,
+  "toObs": Startstrecke bis 15 m m,
+  "ldRoll": Landerollstrecke m,
+  "ldObs": Landestrecke von 15 m m,
+  "daTO": 10, "daLD": 3.5, "hwKt": 9, "twKt": 2,
+  "tab": {
+    "src": "kurze Quellenangabe mit Seite und Bedingungen",
+    "alts": [Druckhöhen in ft aufsteigend],
+    "temps": [Temperaturen in °C aufsteigend],
+    "grassTO": Zuschlag trockenes Gras Start als Anteil der Rollstrecke (0.15 = 15 %),
+    "grassLD": Zuschlag trockenes Gras Landung als Anteil der Rollstrecke,
+    "toWeights": [Massen in kg aufsteigend, für die Start-Tabellen im Handbuch stehen, nur wenn es mehrere Massen gibt],
+    "ldWeights": [Massen in kg für die Lande-Tabellen, nur wenn es mehrere Massen gibt],
+    "toRoll": [[eine Zeile je Höhe in alts, darin je ein Wert pro Temperatur in temps], ...],
+    "toObs": [...gleiche Form, Strecke über 15 m Hindernis],
+    "ldRoll": [...Landerollstrecke],
+    "ldObs": [...Landestrecke über 15 m]
+  },
+  "hinweise": ["..."]
+}
+
+Regeln:
+- "env" ist der zulässige Schwerpunktbereich als Polygon, Punkte der Reihe nach entlang des Randes (vorderes Limit, hinteres Limit, jeweils bei niedrigster und höchster Masse).
+- "tab" nur ausfüllen, wenn das Handbuch Tabellen für Start- und Landestrecke nach Druckhöhe und Temperatur hat. Sonst "tab" ganz weglassen. Die Zahlen in den Tabellen genau abschreiben.
+- Hat das Handbuch Start- oder Landetabellen für mehrere Massen, nimm alle auf: toWeights bzw. ldWeights ausfüllen und toRoll, toObs, ldRoll, ldObs mit drei Ebenen schreiben, also [Masse][Höhe][Temperatur] in der Reihenfolge der Massenliste. Gibt es nur eine Masse, lass die Massenlisten weg und schreibe zwei Ebenen [Höhe][Temperatur]. Gelten Tabellen für mehrere Klappenstellungen, nimm die für den normalen Start bzw. die normale Landung und nenne die Wahl in "hinweise".
+- Nenne in "hinweise" auch, für welche Masse, Klappenstellung und Bedingungen die Tabellen gelten.`;
+function checkTab(t){
+  const is3=g=>Array.isArray(g)&&Array.isArray(g[0])&&Array.isArray(g[0][0]);
+  const grid=(g,r,c)=>Array.isArray(g)&&g.length===r&&g.every(row=>Array.isArray(row)&&row.length===c&&row.every(v=>Number.isFinite(+v)));
+  const asc=a=>Array.isArray(a)&&a.every((v,i)=>Number.isFinite(+v)&&(i===0||+v>+a[i-1]));
+  if(!t||!Array.isArray(t.alts)||!Array.isArray(t.temps)) return 'Höhen oder Temperaturen fehlen';
+  if(t.alts.length<2||t.temps.length<2) return 'zu wenige Stützstellen';
+  if(!asc(t.alts)||!asc(t.temps)) return 'Höhen oder Temperaturen nicht aufsteigend';
+  const R=t.alts.length, C=t.temps.length;
+  const chk=(keys,wk)=>{
+    if(keys.some(k=>is3(t[k]))){
+      const w=t[wk];
+      if(!asc(w)||w.length<2) return 'Massenliste '+wk+' fehlt oder ist nicht aufsteigend';
+      for(const k of keys) if(!Array.isArray(t[k])||t[k].length!==w.length||!t[k].every(g=>grid(g,R,C))) return 'Tabelle '+k+' passt nicht zu '+wk;
+    }else for(const k of keys) if(!grid(t[k],R,C)) return 'Tabelle '+k+' hat die falsche Größe';
+    return '';
+  };
+  return chk(['toRoll','toObs'],'toWeights')||chk(['ldRoll','ldObs'],'ldWeights');
+}
+function importText(raw){
+  try{
+    raw=String(raw||'').trim();
+    const fm=raw.match(/```(?:json)?\s*([\s\S]*?)```/); if(fm) raw=fm[1].trim();
+    const a0=raw.indexOf('{'), a1=raw.lastIndexOf('}'); if(a0<0||a1<a0) throw new Error('kein JSON');
+    raw=raw.slice(a0,a1+1);
+    const o=JSON.parse(raw), isHangar=Array.isArray(o.hangar), list=isHangar?o.hangar:[o];
+    if(!list.length) throw new Error('leer');
+    const numKeys=['empty','emptyArm','mtow','mlw','maxXw','tank','dens','burn','tas','fuelArm','toRoll','toObs','ldRoll','ldObs','daTO','daLD','hwKt','twKt','bagMax'];
+    const notes=[];
+    const clean=list.map(x=>{
+      if(!x||!Array.isArray(x.st)||!Array.isArray(x.env)) throw new Error('Pflichtfelder fehlen');
+      const y=Object.assign(JSON.parse(JSON.stringify(EXAMPLE)),x);
+      numKeys.forEach(k=>{ if(x[k]!==undefined){ y[k]=+x[k]; if(!Number.isFinite(y[k])) throw new Error('Feld '+k+' ist keine Zahl'); } });
+      while(y.st.length<4) y.st.push({n:'Station',arm:1,max:0});
+      y.st=y.st.slice(0,4).map(t=>({n:String(t.n||'Station'),arm:+t.arm||0,max:+t.max||0}));
+      y.env=y.env.filter(pt=>Array.isArray(pt)&&Number.isFinite(+pt[0])&&Number.isFinite(+pt[1])).map(pt=>[+pt[0],+pt[1]]);
+      if(y.env.length<3) throw new Error('Schwerpunktbereich fehlt');
+      if(!(y.mtow>0)||!(y.empty>0)) throw new Error('Massen fehlen');
+      if(y.tab){ const m=checkTab(y.tab); if(m){ notes.push((y.name||'Flugzeug')+': Tabellen nicht übernommen ('+m+')'); delete y.tab; } else { y.tab.grassTO=+y.tab.grassTO||0; y.tab.grassLD=+y.tab.grassLD||0; y.tab.alts=y.tab.alts.map(Number); y.tab.temps=y.tab.temps.map(Number); const dn=v=>Array.isArray(v)?v.map(dn):Number(v); ['toRoll','toObs','ldRoll','ldObs'].forEach(k=>y.tab[k]=dn(y.tab[k])); ['toWeights','ldWeights'].forEach(k=>{ if(Array.isArray(y.tab[k])) y.tab[k]=y.tab[k].map(Number); else delete y.tab[k]; }); y.tab.src=String(y.tab.src||''); } }
+      if(Array.isArray(x.hinweise)) x.hinweise.forEach(h=>notes.push((y.name||'Flugzeug')+': '+h));
+      delete y.hinweise;
+      return y;
+    });
+    if(isHangar){ S.hangar=clean; S.pendingDel=-1; useAircraft(Math.min(Math.max(parseInt(o.cur)||0,0),clean.length-1)); }
+    else { S.hangar.push(clean[0]); S.pendingDel=-1; useAircraft(S.hangar.length-1); }
+    let msg = isHangar ? clean.length+' Flugzeug(e) geladen (Hangar ersetzt).' : 'Flugzeug „'+esc(clean[0].name)+'“ ist neu im Hangar und aktiv. Prüfe alle Werte im Reiter Daten.';
+    if(notes.length) msg+='<br><b>Hinweise:</b><br>'+notes.map(esc).join('<br>');
+    return msg;
+  }catch(err){
+    return 'Der Text konnte nicht gelesen werden ('+esc(err.message||'Format')+'). Füge die komplette Antwort mit den geschweiften Klammern ein.';
+  }
 }
 function useAircraft(i){
   S.cur=i; S.ac=S.hangar[i]; S.pendingDel=-1;
